@@ -2,7 +2,7 @@
 
 Portfolio local de reservas automáticas de salas y equipos ficticios. Arquitectura prevista: Angular/RxJS, API Spring WebFlux, Kafka y servicio booking con Hibernate/PostgreSQL. Las lecturas usan REST interno y las notificaciones SSE.
 
-El proyecto está en preparación. Existen los tres módulos Java y sus pruebas de contexto; el frontend, la infraestructura y las funciones de reservas se implementarán en las tareas siguientes. Todavía no hay un arranque completo de Booklane.
+El proyecto está en preparación. Existen los tres módulos Java y la base Angular con pruebas. La infraestructura y las funciones de reservas se implementarán en las tareas siguientes. Todavía no hay un arranque completo de Booklane.
 
 ## Requisitos y versiones elegidas
 
@@ -11,17 +11,17 @@ Matriz contrastada el 27/10/2026. Esta base de implementación todavía no demue
 | Componente | Versión elegida | Referencia |
 | --- | --- | --- |
 | JDK Eclipse Temurin | 21.0.12.1+1, Windows x64 | [Distribución oficial](https://github.com/adoptium/temurin21-binaries/releases/tag/jdk-21.0.12.1%2B1) |
-| Maven | 3.9.16, mediante futuro Wrapper | [Descargas](https://maven.apache.org/download.cgi) |
+| Maven | 3.9.16, mediante Wrapper | [Descargas](https://maven.apache.org/download.cgi) |
 | Spring Boot | 4.1.2, BOM común | [Requisitos](https://docs.spring.io/spring-boot/system-requirements.html) |
-| Angular framework/compiler | 22.0.8 | [Paquete oficial](https://registry.npmjs.org/@angular/core/22.0.8) |
-| Angular CLI/build | 22.0.9 | [Paquete oficial](https://registry.npmjs.org/@angular/build/22.0.9) |
+| Angular framework/compiler | 22.2.3 | [Paquete oficial](https://registry.npmjs.org/@angular/core/22.2.3) |
+| Angular CLI/build | 22.2.4 | [Paquete oficial](https://registry.npmjs.org/@angular/build/22.2.4) |
 | Angular Material/CDK | 22.0.7 | [Paquete oficial](https://registry.npmjs.org/@angular/material/22.0.7) |
 | Node.js / npm | 24.19.0 / 11.17.0 | Disponibles; [compatibilidad Angular](https://angular.dev/reference/versions) |
 | TypeScript / RxJS | 6.0.3 / 7.8.2 | [TypeScript](https://registry.npmjs.org/typescript/6.0.3), [RxJS](https://registry.npmjs.org/rxjs/7.8.2) |
 | PostgreSQL | Imagen `postgres:18.6-bookworm` | [Imagen oficial](https://hub.docker.com/_/postgres) |
 | Kafka | Imagen `apache/kafka:4.1.2`, KRaft | [Imagen oficial](https://kafka.apache.org/41/getting-started/docker/) |
 
-Spring Framework, Spring Security, Spring Kafka, cliente Kafka, Hibernate y demás dependencias gestionadas quedan bajo el BOM de Spring Boot, sin versiones independientes. Las imágenes tienen etiquetas concretas; aún no se han descargado ni probado y sus digests quedan para la infraestructura. Los lockfiles y el Wrapper se crearán en sus tareas.
+Spring Framework, Spring Security, Spring Kafka, cliente Kafka, Hibernate y demás dependencias gestionadas quedan bajo el BOM de Spring Boot, sin versiones independientes. Las imágenes tienen etiquetas concretas; aún no se han descargado ni probado y sus digests quedan para la infraestructura. El Wrapper y el lockfile Angular ya están versionados.
 
 ## Preparar Windows
 
@@ -60,7 +60,7 @@ docker desktop start
 docker info --format '{{.OSType}} {{.ServerVersion}}'
 ```
 
-El último comando debe indicar `linux`; disponer del cliente Docker no basta. No ejecutar todavía `docker compose up` o `npm ci`: sus ficheros aún no existen. Mantener secretos y configuraciones generadas en `.local`, excluido de Git.
+El último comando debe indicar `linux`; disponer del cliente Docker no basta. No ejecutar todavía `docker compose up`: su configuración aún no existe. Para el frontend, usar los comandos indicados más abajo. Mantener secretos y configuraciones generadas en `.local`, excluido de Git.
 
 ## Compilar y comprobar Java
 
@@ -91,4 +91,24 @@ El 27/10/2026 se verificaron Node 24.19.0, npm 11.17.0, WSL 2.7.11.0 y Docker Li
 
 Tras autorización de instalación se descargó Temurin 21.0.12.1+1 y se verificó su SHA-256 oficial: `f9d6e191ab098c0d416e7d588a24420a8621cd2f4720dab2459b8b7b2d2d8b4e`. Con la selección por terminal indicada, `java -version` devuelve Temurin 21.0.12.1+1 y `javac -version` devuelve 21.0.12.1. Docker Linux y Compose se comprobaron de nuevo correctamente. No se modificó el Java global.
 
-La planificación y el registro detallado se conservan localmente, excluidos de Git por la configuración existente. T001 y T002 están completadas: entorno y base Java verificados. Las funciones de negocio y su infraestructura siguen pendientes.
+La planificación y el registro detallado se conservan localmente, excluidos de Git por la configuración existente. Entorno y base Java verificados; véase también la base Angular. Las funciones de negocio y su infraestructura siguen pendientes.
+
+## Base Angular
+
+Desde frontend:
+
+~~~powershell
+npm ci
+npm run build
+npm run lint
+npm test
+npx playwright install chromium
+npm run test:e2e
+npm start
+~~~
+
+Node 24.19.0/npm 11.17.0. La página inicial standalone carga de forma lazy. El diseño funcional comienza en T021: todavía no hay acceso, calendario o acciones de reserva. TypeScript/templates son estrictos; lint ejecuta los chequeos de tipos de app, tests y E2E. Build valida además templates y tamaños.
+
+El servidor solo escucha en http://127.0.0.1:4200 y reenvía /api/** a la API local en 127.0.0.1:8081, sin conectar con booking. Playwright inicia/detiene su servidor y requiere el puerto libre. El humo funciona sin backend. Más detalle en [frontend/README.md](frontend/README.md).
+
+T003 ajusta la matriz con autorización del desarrollador: Angular framework/compiler 22.2.3, CLI/build 22.2.4 y Vitest 4.1.12 corrigen alertas de la resolución 22.0. Material/CDK permanece en 22.0.7, con peers compatibles. Un override acotado fija Vite de Angular build en 8.3.3 por sus [correcciones de seguridad](https://github.com/vitejs/vite/releases/tag/v8.3.3); retirarlo cuando build incorpore una versión corregida y repetir las comprobaciones. No se aplicó audit fix --force.
