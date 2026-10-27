@@ -1,3 +1,11 @@
+# Planificacion y documentacion interna (solo local)
+AGENTS.md
+/ESPECIFICACION.md
+/plan.md
+/tareas.md
+/backlog/
+/docs/
+
 # Secretos y configuracion local generada
 .local/
 .env
