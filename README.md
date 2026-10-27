@@ -42,6 +42,17 @@ docker info --format '{{.OSType}} {{.ServerVersion}}'
 
 `java` y `javac` deben resolver al mismo JDK 21. Configurar `JAVA_HOME` con su directorio y anteponer su carpeta `bin` al `PATH`. Tener solamente un JRE o un compilador de otra versión no prepara el entorno elegido. Maven global no será necesario cuando exista el Wrapper.
 
+La instalación aislada de este equipo se selecciona en cada terminal de PowerShell con:
+
+```powershell
+$env:JAVA_HOME = Join-Path $env:LOCALAPPDATA 'Booklane\tools\jdk-21.0.12.1+1'
+$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+java -version
+javac -version
+```
+
+En otro equipo, ajustar `JAVA_HOME` a la ubicación de su JDK. La selección por terminal conserva las instalaciones y variables globales existentes.
+
 Si Docker está detenido, arrancarlo y repetir la comprobación del servidor:
 
 ```powershell
@@ -55,6 +66,6 @@ El último comando debe indicar `linux`; disponer del cliente Docker no basta. N
 
 El 27/10/2026 se verificaron Node 24.19.0, npm 11.17.0, WSL 2.7.11.0 y Docker Linux 29.6.2 con Compose 5.3.1 después de arrancar Docker Desktop. No se descargaron imágenes ni se iniciaron servicios de Booklane.
 
-**Bloqueo de preparación:** `java -version` devuelve 1.8.0_401, `javac -version` devuelve 17.0.11 y `JAVA_HOME` no está definido. No se encontró JDK 21 en las ubicaciones habituales revisadas; Ubuntu WSL tampoco dispone de Java. Falta provisionar el JDK elegido y comprobar de nuevo ambos comandos. No se instaló ni sustituyó software durante este inventario.
+Tras autorización de instalación se descargó Temurin 21.0.12.1+1 y se verificó su SHA-256 oficial: `f9d6e191ab098c0d416e7d588a24420a8621cd2f4720dab2459b8b7b2d2d8b4e`. Con la selección por terminal indicada, `java -version` devuelve Temurin 21.0.12.1+1 y `javac -version` devuelve 21.0.12.1. Docker Linux y Compose se comprobaron de nuevo correctamente. No se modificó el Java global.
 
-La planificación y el registro detallado se conservan localmente, excluidos de Git por la configuración existente. El avance permanece en T001; no se ha completado ninguna tarea ni se han ejecutado pruebas de aplicación.
+La planificación y el registro detallado se conservan localmente, excluidos de Git por la configuración existente. T001 está completada; las pruebas de aplicación se incorporarán con los módulos Java.
