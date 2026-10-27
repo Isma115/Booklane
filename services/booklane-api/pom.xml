@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.booklane</groupId><artifactId>booklane</artifactId><version>0.1.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+  <artifactId>booklane-api</artifactId>
+  <dependencies>
+    <dependency><groupId>com.booklane</groupId><artifactId>contracts-java</artifactId></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-webflux</artifactId></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>com.tngtech.archunit</groupId><artifactId>archunit</artifactId><scope>test</scope></dependency>
+  </dependencies>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>reactive-api-boundary</id><goals><goal>enforce</goal></goals>
+            <configuration>
+              <rules><bannedDependencies><excludes>
+                <exclude>com.booklane:booklane-booking</exclude>
+                <exclude>org.hibernate*:*</exclude>
+                <exclude>jakarta.persistence:*</exclude>
+                <exclude>javax.persistence:*</exclude>
+                <exclude>org.springframework:spring-jdbc</exclude>
+                <exclude>org.springframework:spring-orm</exclude>
+                <exclude>org.springframework:spring-webmvc</exclude>
+                <exclude>org.springframework.data:spring-data-jpa</exclude>
+                <exclude>org.springframework.boot:*jdbc*</exclude>
+                <exclude>org.springframework.boot:*jpa*</exclude>
+                <exclude>org.springframework.boot:*hibernate*</exclude>
+                <exclude>org.springframework.boot:*webmvc*</exclude>
+                <exclude>org.springframework.boot:spring-boot-starter-web</exclude>
+                <exclude>org.apache.tomcat.embed:*</exclude>
+                <exclude>jakarta.servlet:*</exclude>
+                <exclude>org.postgresql:*</exclude>
+                <exclude>com.h2database:*</exclude>
+                <exclude>com.zaxxer:HikariCP</exclude>
+              </excludes></bannedDependencies></rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

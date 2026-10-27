@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: booklane-booking
+  main:
+    web-application-type: servlet
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+server:
+  address: 127.0.0.1
+  port: 8082

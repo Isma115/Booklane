@@ -2,7 +2,7 @@
 
 Portfolio local de reservas automáticas de salas y equipos ficticios. Arquitectura prevista: Angular/RxJS, API Spring WebFlux, Kafka y servicio booking con Hibernate/PostgreSQL. Las lecturas usan REST interno y las notificaciones SSE.
 
-El proyecto está en preparación. Todavía no existen aplicaciones, Maven Wrapper, frontend ni Compose; no hay un comando de arranque de Booklane disponible.
+El proyecto está en preparación. Existen los tres módulos Java y sus pruebas de contexto; el frontend, la infraestructura y las funciones de reservas se implementarán en las tareas siguientes. Todavía no hay un arranque completo de Booklane.
 
 ## Requisitos y versiones elegidas
 
@@ -60,7 +60,30 @@ docker desktop start
 docker info --format '{{.OSType}} {{.ServerVersion}}'
 ```
 
-El último comando debe indicar `linux`; disponer del cliente Docker no basta. No ejecutar todavía `docker compose up`, `mvnw` o `npm ci`: sus ficheros aún no existen. Mantener secretos y configuraciones generadas en `.local`, excluido de Git.
+El último comando debe indicar `linux`; disponer del cliente Docker no basta. No ejecutar todavía `docker compose up` o `npm ci`: sus ficheros aún no existen. Mantener secretos y configuraciones generadas en `.local`, excluido de Git.
+
+## Compilar y comprobar Java
+
+Desde la raíz, después de seleccionar el JDK 21:
+
+```powershell
+.\mvnw.cmd -B -ntp verify
+```
+
+En Linux/macOS con JDK 21: `./mvnw -B -ntp verify`. El Wrapper descarga Maven 3.9.16 y valida su SHA-256. Requiere acceso a Maven Central la primera vez.
+
+El agregador construye `contracts-java`, `booklane-api` (WebFlux/Netty) y `booklane-booking` (MVC/Hibernate). Surefire ejecuta `*Test`; Failsafe reserva `*IT` para las pruebas de integración futuras. Actualmente hay cuatro pruebas de contexto/arquitectura, sin pruebas de persistencia o Kafka. El módulo de protocolo todavía está vacío hasta T004.
+
+Las pruebas arrancan servidores locales en puertos aleatorios y con perfil `isolated`. Solo en los recursos de test de booking se excluye DataSource: no se usa H2 y no se simula una conexión satisfactoria a PostgreSQL. Fuera de las pruebas, booking requiere su futura configuración PostgreSQL. No hay endpoints de negocio ni autenticación definitiva.
+
+Para comprobar que Enforcer rechaza MVC/JDBC/JPA en api, dependencias cruzadas entre aplicaciones y Spring en contracts-java:
+
+```powershell
+.\mvnw.cmd -B -ntp install
+.\scripts\check-dependency-boundaries.ps1
+```
+
+Las seis pruebas negativas generan POM y registros en `.local/dependency-probes`, sin modificar módulos. Necesitan el `install` previo para resolver los artefactos locales entre aplicaciones. Las reglas ArchUnit se amplían conforme aparezcan dominio, aplicación y adaptadores; sus reglas sobre paquetes futuros admiten temporalmente coincidencias vacías.
 
 ## Comprobación del entorno de desarrollo
 
@@ -68,4 +91,4 @@ El 27/10/2026 se verificaron Node 24.19.0, npm 11.17.0, WSL 2.7.11.0 y Docker Li
 
 Tras autorización de instalación se descargó Temurin 21.0.12.1+1 y se verificó su SHA-256 oficial: `f9d6e191ab098c0d416e7d588a24420a8621cd2f4720dab2459b8b7b2d2d8b4e`. Con la selección por terminal indicada, `java -version` devuelve Temurin 21.0.12.1+1 y `javac -version` devuelve 21.0.12.1. Docker Linux y Compose se comprobaron de nuevo correctamente. No se modificó el Java global.
 
-La planificación y el registro detallado se conservan localmente, excluidos de Git por la configuración existente. T001 está completada; las pruebas de aplicación se incorporarán con los módulos Java.
+La planificación y el registro detallado se conservan localmente, excluidos de Git por la configuración existente. T001 y T002 están completadas: entorno y base Java verificados. Las funciones de negocio y su infraestructura siguen pendientes.

@@ -1,0 +1,5 @@
+# Only context wiring is tested here; real persistence is tested with PostgreSQL in T007.
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
