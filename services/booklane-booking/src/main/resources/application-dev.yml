@@ -1,0 +1,4 @@
+# Host processes connect only to the future dev loopback ports.
+booklane:
+  database-url: "${BOOKLANE_DB_URL:jdbc:postgresql://127.0.0.1:15432/booklane}"
+  kafka-bootstrap-servers: "${BOOKLANE_KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:19092}"

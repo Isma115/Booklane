@@ -1,0 +1,9 @@
+# Test-only credentials; no connection is established by configuration/catalog tests.
+booklane:
+  users-file: "${booklane.root}/infra/demo/users.json"
+  internal-username: booklane-internal
+  internal-password: "1111111111111111111111111111111111111111111111111111111111111111"
+  kafka-username: booklane-api
+  kafka-password: "2222222222222222222222222222222222222222222222222222222222222222"
+  kafka-bootstrap-servers: 127.0.0.1:19092
+  booking-base-url: http://127.0.0.1:8082

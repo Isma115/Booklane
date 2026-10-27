@@ -1,0 +1,4 @@
+# Container endpoints; bind addresses stay loopback until explicitly configured by Compose.
+booklane:
+  database-url: "${BOOKLANE_DB_URL:jdbc:postgresql://postgres:5432/booklane}"
+  kafka-bootstrap-servers: "${BOOKLANE_KAFKA_BOOTSTRAP_SERVERS:kafka:9092}"

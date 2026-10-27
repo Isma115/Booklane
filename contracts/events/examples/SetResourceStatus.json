@@ -4,7 +4,7 @@
   "commandId": "30000000-0000-4000-8000-000000000001",
   "type": "SetResourceStatus",
   "resourceId": "10000000-0000-4000-8000-000000000001",
-  "actorId": "20000000-0000-4000-8000-000000000001",
+  "actorId": "20000000-0000-4000-8000-000000000003",
   "actorRole": "ADMIN",
   "requestHash": "b1a511134edad636bdd0b84df83e3a5ff2cb90c93a74050ae41d060f87e5e1e5",
   "issuedAt": "2026-10-27T10:00:00Z",

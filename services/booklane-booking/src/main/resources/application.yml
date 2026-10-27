@@ -1,4 +1,8 @@
 spring:
+  datasource:
+    url: "${booklane.database-url}"
+    username: "${booklane.database-username}"
+    password: "${booklane.database-password}"
   application:
     name: booklane-booking
   main:
@@ -10,3 +14,13 @@ spring:
 server:
   address: 127.0.0.1
   port: 8082
+booklane:
+  users-file: "${BOOKLANE_USERS_FILE:}"
+  database-url: "${BOOKLANE_DB_URL:}"
+  database-username: booklane_booking
+  database-password: "${BOOKLANE_DB_PASSWORD:}"
+  internal-username: booklane-internal
+  internal-password: "${BOOKLANE_INTERNAL_PASSWORD:}"
+  kafka-bootstrap-servers: "${BOOKLANE_KAFKA_BOOTSTRAP_SERVERS:}"
+  kafka-username: booklane-booking
+  kafka-password: "${BOOKLANE_KAFKA_BOOKING_PASSWORD:}"

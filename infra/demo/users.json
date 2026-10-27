@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "users": [
+    {
+      "id": "20000000-0000-4000-8000-000000000001",
+      "username": "alicia",
+      "role": "USER",
+      "passwordHash": "$2a$12$j1.rsYnmYdIC8EC/7fwR5.aRLmdIvASmt5EyTwiFZyAmKBTd2BlJS"
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000002",
+      "username": "bruno",
+      "role": "USER",
+      "passwordHash": "$2a$12$cUjeyPuaDuERVlwhcGxBcu1Ve9oyaJYNcFFspyXkhj9pyGooq41Xq"
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000003",
+      "username": "admin",
+      "role": "ADMIN",
+      "passwordHash": "$2a$12$M2/6orwUlNu99bbaJutc0e.sqe3tucIZn59l5YVG0G29zy.d1otFm"
+    }
+  ]
+}

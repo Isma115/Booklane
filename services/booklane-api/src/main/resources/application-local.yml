@@ -1,0 +1,4 @@
+# Container endpoints; bind addresses stay loopback until explicitly configured by Compose.
+booklane:
+  booking-base-url: "${BOOKLANE_BOOKING_BASE_URL:http://booklane-booking:8082}"
+  kafka-bootstrap-servers: "${BOOKLANE_KAFKA_BOOTSTRAP_SERVERS:kafka:9092}"

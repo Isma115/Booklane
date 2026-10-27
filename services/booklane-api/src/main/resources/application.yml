@@ -6,3 +6,11 @@ spring:
 server:
   address: 127.0.0.1
   port: 8081
+booklane:
+  users-file: "${BOOKLANE_USERS_FILE:}"
+  booking-base-url: "${BOOKLANE_BOOKING_BASE_URL:}"
+  internal-username: booklane-internal
+  internal-password: "${BOOKLANE_INTERNAL_PASSWORD:}"
+  kafka-bootstrap-servers: "${BOOKLANE_KAFKA_BOOTSTRAP_SERVERS:}"
+  kafka-username: booklane-api
+  kafka-password: "${BOOKLANE_KAFKA_API_PASSWORD:}"

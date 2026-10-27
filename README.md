@@ -72,9 +72,9 @@ Desde la raíz, después de seleccionar el JDK 21:
 
 En Linux/macOS con JDK 21: `./mvnw -B -ntp verify`. El Wrapper descarga Maven 3.9.16 y valida su SHA-256. Requiere acceso a Maven Central la primera vez.
 
-El agregador construye `contracts-java`, `booklane-api` (WebFlux/Netty) y `booklane-booking` (MVC/Hibernate). Surefire ejecuta `*Test`; Failsafe reserva `*IT` para las pruebas de integración futuras. Actualmente hay 14 pruebas Java: diez de protocolo/huella y cuatro de contexto/arquitectura, sin pruebas de persistencia o Kafka. contracts-java contiene records wire, normalización SHA-256 y serialización explícita.
+El agregador construye `contracts-java`, `booklane-api` (WebFlux/Netty) y `booklane-booking` (MVC/Hibernate). Surefire ejecuta `*Test`; Failsafe reserva `*IT` para las pruebas de integración futuras. Actualmente hay 30 pruebas Java: diez de protocolo/huella, dieciséis de configuración/catálogos y cuatro de contexto/arquitectura, sin pruebas de persistencia o Kafka. contracts-java contiene records wire, normalización SHA-256 y serialización explícita.
 
-Las pruebas arrancan servidores locales en puertos aleatorios y con perfil `isolated`. Solo en los recursos de test de booking se excluye DataSource: no se usa H2 y no se simula una conexión satisfactoria a PostgreSQL. Fuera de las pruebas, booking requiere su futura configuración PostgreSQL. No hay endpoints de negocio ni autenticación definitiva.
+Las pruebas arrancan servidores locales en puertos aleatorios y con perfil `test`. Solo en los recursos de test de booking se excluye DataSource: no se usa H2 y no se simula una conexión satisfactoria a PostgreSQL. Fuera de las pruebas, booking requiere su futura configuración PostgreSQL. No hay endpoints de negocio ni autenticación definitiva.
 
 Para comprobar que Enforcer rechaza MVC/JDBC/JPA en api, dependencias cruzadas entre aplicaciones y Spring en contracts-java:
 
@@ -124,3 +124,41 @@ Para verificar contratos y sus consumidores, seleccionar JDK 21, ejecutar npm ci
 ~~~
 
 Los validadores Python se instalan con versiones exactas en .local/contracts-venv, sin cambios globales. El comando ejecuta Maven, valida contratos/ejemplos y JSON realmente serializado, comprueba los tipos Angular y ejecuta sus pruebas/build. En T004 pasaron 14 tests Java, dos Angular, ambos OpenAPI, tres JSON Schema y seis rechazos de dependencias prohibidas. La prueba Chromium de T003 sigue siendo solo humo de base, no una reserva real.
+
+## Configuración local y cuentas ficticias
+
+Seleccionar JDK 21 como se indica arriba y ejecutar desde la raíz, en Windows PowerShell 5.1:
+
+~~~powershell
+.\scripts\init-local.ps1
+.\scripts\check-local-config.ps1
+~~~
+
+init-local comprueba herramientas y Docker Linux, sin instalar ni arrancar servicios. Genera siete secretos técnicos aleatorios en .local/runtime/secrets.json y env separados para API, booking, PostgreSQL, Kafka y provisión. Una segunda ejecución conserva las credenciales; un origen corrupto o desaparecido falla sin rotarlas. Los ficheros quedan restringidos al usuario actual y SYSTEM y excluidos de Git. No subir .local ni usar contraseñas personales. El inventario de variables está en [.env.example](.env.example).
+
+El catálogo compartido [infra/demo/users.json](infra/demo/users.json) incluye únicamente estas cuentas públicas de demostración:
+
+| Usuario | Contraseña demo pública | Rol |
+| --- | --- | --- |
+| alicia | AliciaDemo!2026 | USER |
+| bruno | BrunoDemo!2026 | USER |
+| admin | AdminDemo!2026 | ADMIN |
+
+Los UUID completos y estables figuran en el catálogo. Son cuentas ficticias, sin registro público. API carga hashes BCrypt coste 12; booking conserva solo identidad y rol. Todavía no hay endpoint de acceso.
+
+Para preparar la API en una terminal nueva, desde la raíz, cargar solo su fichero:
+
+~~~powershell
+Get-ChildItem Env:BOOKLANE_* | ForEach-Object { Remove-Item -LiteralPath ('Env:' + $_.Name) }
+foreach ($line in Get-Content .local/runtime/api.env) {
+    if ($line -match '^BOOKLANE_[A-Z_]+=') {
+        $parts = $line -split '=', 2
+        [Environment]::SetEnvironmentVariable($parts[0], $parts[1], 'Process')
+    }
+}
+$env:SPRING_PROFILES_ACTIVE = 'dev'
+~~~
+
+Para booking, usar otra terminal y booking.env. El código anterior no ejecuta el contenido del fichero ni modifica variables globales. Los env de API/booking contienen la ruta absoluta del catálogo en el host; el futuro Compose deberá montar ese mismo catálogo como solo lectura y sobreescribir su ruta dentro del contenedor.
+
+dev usa loopback: Kafka 19092, PostgreSQL 15432 y booking HTTP 8082; local usa nombres de contenedor kafka, postgres y booklane-booking. Las credenciales no tienen valores por defecto y la configuración/catálogo se valida antes de abrir conexiones. Se conservan los enlaces de servidor a loopback. T006 creará la infraestructura; T005 no implica que estén disponibles ni habilita aún reservas/login.

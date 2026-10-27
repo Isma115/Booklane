@@ -1,0 +1,4 @@
+# Host processes connect only to the future dev loopback ports.
+booklane:
+  booking-base-url: "${BOOKLANE_BOOKING_BASE_URL:http://127.0.0.1:8082}"
+  kafka-bootstrap-servers: "${BOOKLANE_KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:19092}"

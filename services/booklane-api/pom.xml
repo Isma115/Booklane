@@ -8,6 +8,7 @@
   </parent>
   <artifactId>booklane-api</artifactId>
   <dependencies>
+    <dependency><groupId>org.springframework.security</groupId><artifactId>spring-security-crypto</artifactId><scope>test</scope></dependency>
     <dependency><groupId>com.booklane</groupId><artifactId>contracts-java</artifactId></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-webflux</artifactId></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
