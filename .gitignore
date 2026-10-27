@@ -75,3 +75,7 @@ logs/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Herramientas Python locales de validación
+__pycache__/
+*.py[cod]

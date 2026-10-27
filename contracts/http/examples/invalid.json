@@ -1,0 +1,91 @@
+[
+  {
+    "file": "browser-cannot-choose-actor",
+    "schema": "CreateBookingRequest",
+    "value": {
+      "commandId": "30000000-0000-4000-8000-000000000001",
+      "resourceId": "10000000-0000-4000-8000-000000000001",
+      "startsAt": "2026-10-28T08:00:00Z",
+      "endsAt": "2026-10-28T09:00:00Z",
+      "title": "Reunión Prisma",
+      "actorId": "20000000-0000-4000-8000-000000000001"
+    },
+    "keyword": "additionalProperties",
+    "path": "",
+    "valid": false
+  },
+  {
+    "file": "short-title",
+    "schema": "CreateBookingRequest",
+    "value": {
+      "commandId": "30000000-0000-4000-8000-000000000001",
+      "resourceId": "10000000-0000-4000-8000-000000000001",
+      "startsAt": "2026-10-28T08:00:00Z",
+      "endsAt": "2026-10-28T09:00:00Z",
+      "title": "x"
+    },
+    "keyword": "minLength",
+    "path": "/title",
+    "valid": false
+  },
+  {
+    "file": "no-subseconds",
+    "schema": "CreateBookingRequest",
+    "value": {
+      "commandId": "30000000-0000-4000-8000-000000000001",
+      "resourceId": "10000000-0000-4000-8000-000000000001",
+      "startsAt": "2026-10-28T08:00:00.001Z",
+      "endsAt": "2026-10-28T09:00:00Z",
+      "title": "Reunión Prisma"
+    },
+    "keyword": "pattern",
+    "path": "/startsAt",
+    "valid": false
+  },
+  {
+    "file": "unknown-active-type",
+    "schema": "SetResourceStatusRequest",
+    "value": {
+      "commandId": "30000000-0000-4000-8000-000000000001",
+      "active": "false",
+      "reason": "Mantenimiento",
+      "expectedVersion": 0
+    },
+    "keyword": "type",
+    "path": "/active",
+    "valid": false
+  },
+  {
+    "file": "negative-version",
+    "schema": "SetResourceStatusRequest",
+    "value": {
+      "commandId": "30000000-0000-4000-8000-000000000001",
+      "active": false,
+      "reason": "Mantenimiento",
+      "expectedVersion": -1
+    },
+    "keyword": "minimum",
+    "path": "/expectedVersion",
+    "valid": false
+  },
+  {
+    "file": "page-size",
+    "route": "/api/resources",
+    "method": "get",
+    "parameter": "size",
+    "value": 101,
+    "keyword": "maximum",
+    "path": "",
+    "valid": false
+  },
+  {
+    "file": "invalid-sort",
+    "route": "/api/resources",
+    "method": "get",
+    "parameter": "sort",
+    "value": "title,asc",
+    "keyword": "enum",
+    "path": "",
+    "valid": false
+  }
+]

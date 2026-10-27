@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "messageId": "40000000-0000-4000-8000-000000000001",
+  "commandId": "30000000-0000-4000-8000-000000000001",
+  "type": "SetResourceStatus",
+  "resourceId": "10000000-0000-4000-8000-000000000001",
+  "actorId": "20000000-0000-4000-8000-000000000001",
+  "actorRole": "ADMIN",
+  "requestHash": "3bd360463c43aa7e2f23b157e6d280740b6ebbe49dec7d4ef5a04857d2ccece0",
+  "issuedAt": "2026-10-27T10:00:00Z",
+  "traceId": "50000000-0000-4000-8000-000000000001",
+  "payload": {
+    "active": false,
+    "reason": "Mantenimiento",
+    "expectedVersion": -1
+  }
+}

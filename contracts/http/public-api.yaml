@@ -1,0 +1,2551 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Booklane public API",
+    "version": "1.0.0",
+    "description": "Contrato previo a endpoints. Cookies y CSRF de mismo origen; máximo JSON 16 KiB; UUID canónicos e instantes sin subsegundos. Páginas con desempate por id."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/session": {
+      "get": {
+        "operationId": "session",
+        "summary": "session",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Estado actual; también anónimo. Prepara cookie XSRF-TOKEN.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/SERVICE_UNAVAILABLE"
+          }
+        }
+      },
+      "post": {
+        "operationId": "login",
+        "summary": "login",
+        "security": [
+          {
+            "csrf": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Autenticado; renueva sesión. 401 genérico si falla.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/SERVICE_UNAVAILABLE"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Máximo 16 KiB. Campos desconocidos se rechazan. Texto normalizado antes de validar longitud/publicar.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "logout",
+        "summary": "logout",
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sesión invalidada y sus streams cerrados; renovar CSRF con GET /api/session."
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/SERVICE_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/api/resources": {
+      "get": {
+        "operationId": "resources",
+        "summary": "resources",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Catálogo demo común",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourcePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/SERVICE_UNAVAILABLE"
+          }
+        },
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "ROOM",
+                "EQUIPMENT"
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "name,asc"
+              ],
+              "default": "name,asc"
+            }
+          }
+        ]
+      }
+    },
+    "/api/resources/{id}/availability": {
+      "get": {
+        "operationId": "availability",
+        "summary": "availability",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Snapshot consistente; intervalos anónimos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Availability"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "404": {
+            "$ref": "#/components/responses/NOT_FOUND"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/SERVICE_UNAVAILABLE"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "description": "from inclusivo/to exclusivo en Europe/Madrid; máximo 31 días. Anclas UTC en rejilla de 15 minutos. Sin títulos, actor o propietario ajenos."
+      }
+    },
+    "/api/bookings/commands": {
+      "post": {
+        "operationId": "createBookingCommand",
+        "summary": "createBookingCommand",
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/Accepted"
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/NOT_ACCEPTED"
+          },
+          "504": {
+            "$ref": "#/components/responses/DELIVERY_UNCERTAIN"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Máximo 16 KiB. Campos desconocidos se rechazan. Texto normalizado antes de validar longitud/publicar.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBookingRequest"
+              }
+            }
+          }
+        },
+        "description": "Actor/rol proceden de sesión. Reenvío conserva commandId y contenido; otro intento de transporte genera messageId nuevo."
+      }
+    },
+    "/api/bookings/{bookingId}/cancel-commands": {
+      "post": {
+        "operationId": "cancelBookingCommand",
+        "summary": "cancelBookingCommand",
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/Accepted"
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/NOT_ACCEPTED"
+          },
+          "504": {
+            "$ref": "#/components/responses/DELIVERY_UNCERTAIN"
+          }
+        },
+        "parameters": [
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Máximo 16 KiB. Campos desconocidos se rechazan. Texto normalizado antes de validar longitud/publicar.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelBookingRequest"
+              }
+            }
+          }
+        },
+        "description": "Motivo obligatorio para ADMIN que cancela reserva ajena; se decide en booking."
+      }
+    },
+    "/api/admin/resources/{id}/status-commands": {
+      "post": {
+        "operationId": "setResourceStatusCommand",
+        "summary": "setResourceStatusCommand",
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/Accepted"
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/NOT_ACCEPTED"
+          },
+          "504": {
+            "$ref": "#/components/responses/DELIVERY_UNCERTAIN"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Máximo 16 KiB. Campos desconocidos se rechazan. Texto normalizado antes de validar longitud/publicar.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetResourceStatusRequest"
+              }
+            }
+          }
+        },
+        "description": "Solo ADMIN. La versión se evalúa al procesar; VERSION_CONFLICT es resultado REJECTED, no 409 retroactivo."
+      }
+    },
+    "/api/operations/{commandId}": {
+      "get": {
+        "operationId": "operation",
+        "summary": "operation",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado persistido propio; REJECTED también es HTTP 200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "404": {
+            "$ref": "#/components/responses/OPERATION_NOT_OBSERVED"
+          },
+          "409": {
+            "$ref": "#/components/responses/IDEMPOTENCY_CONFLICT"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/SERVICE_UNAVAILABLE"
+          }
+        },
+        "parameters": [
+          {
+            "name": "commandId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "requestHash",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "description": "Busca actor de sesión+commandId, también para ADMIN. 404 no afirma que fue aceptado; solo intención local conocida permite mantener espera. Sin recibos ni firmas."
+      }
+    },
+    "/api/bookings/mine": {
+      "get": {
+        "operationId": "myBookings",
+        "summary": "myBookings",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reservas propias",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/SERVICE_UNAVAILABLE"
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "CONFIRMED",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "FUTURE",
+                "PAST",
+                "ALL"
+              ],
+              "default": "FUTURE"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "startsAt,asc",
+                "startsAt,desc"
+              ],
+              "default": "startsAt,asc"
+            }
+          }
+        ],
+        "description": "FUTURE: startsAt > reloj del servidor; PAST: startsAt <= reloj; ALL sin filtro temporal. Orden termina en id con la misma dirección."
+      }
+    },
+    "/api/bookings/{id}": {
+      "get": {
+        "operationId": "booking",
+        "summary": "booking",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalle autorizado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Booking"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "404": {
+            "$ref": "#/components/responses/NOT_FOUND"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/SERVICE_UNAVAILABLE"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "description": "Propietario o ADMIN; 404 indistinguible para ajena/inexistente."
+      }
+    },
+    "/api/admin/audit": {
+      "get": {
+        "operationId": "audit",
+        "summary": "audit",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Auditoría ADMIN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditEntryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/SERVICE_UNAVAILABLE"
+          }
+        },
+        "parameters": [
+          {
+            "name": "resourceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "actorId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "CreateBooking",
+                "CancelBooking",
+                "SetResourceStatus"
+              ]
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "SUCCEEDED",
+                "REJECTED"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "occurredAt,asc",
+                "occurredAt,desc"
+              ],
+              "default": "occurredAt,desc"
+            }
+          }
+        ],
+        "description": "Solo ADMIN; fechas from inclusivo/to exclusivo, máximo 31 días cuando se especifica rango. Orden desempata por id."
+      }
+    },
+    "/api/stream": {
+      "get": {
+        "operationId": "stream",
+        "summary": "stream",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE filtrado; sin replay durable. Avisos disparan GET. Heartbeat cada 15 s; búfer 64 y máximo 3 conexiones/sesión; desbordamiento cierra el stream.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event: heartbeat\ndata: {}\n\n"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "429": {
+            "$ref": "#/components/responses/STREAM_LIMIT"
+          },
+          "503": {
+            "$ref": "#/components/responses/SERVICE_UNAVAILABLE"
+          }
+        },
+        "description": "event operation.completed transporta CommandCompleted solo para su actor; availability.changed transporta AvailabilityChanged anónimo. Sesión cerrada cancela streams. Last-Event-ID no garantiza replay."
+      }
+    },
+    "/api/demo/status": {
+      "get": {
+        "operationId": "demoStatus",
+        "summary": "demoStatus",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado observado, no supuesto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "404": {
+            "$ref": "#/components/responses/NOT_FOUND"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/SERVICE_UNAVAILABLE"
+          }
+        },
+        "description": "Solo ADMIN y perfil demo/local; sin él devuelve 404."
+      }
+    },
+    "/api/demo/consumer/pause": {
+      "post": {
+        "operationId": "consumerpause",
+        "summary": "consumerpause",
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado observado tras control",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "404": {
+            "$ref": "#/components/responses/NOT_FOUND"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/SERVICE_UNAVAILABLE"
+          }
+        },
+        "description": "Solo ADMIN y perfil demo/local. No escribe reservas."
+      }
+    },
+    "/api/demo/consumer/resume": {
+      "post": {
+        "operationId": "consumerresume",
+        "summary": "consumerresume",
+        "security": [
+          {
+            "session": [],
+            "csrf": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado observado tras control",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumerStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/INVALID_REQUEST"
+          },
+          "401": {
+            "$ref": "#/components/responses/AUTHENTICATION_REQUIRED"
+          },
+          "403": {
+            "$ref": "#/components/responses/FORBIDDEN"
+          },
+          "404": {
+            "$ref": "#/components/responses/NOT_FOUND"
+          },
+          "413": {
+            "$ref": "#/components/responses/PAYLOAD_TOO_LARGE"
+          },
+          "503": {
+            "$ref": "#/components/responses/SERVICE_UNAVAILABLE"
+          }
+        },
+        "description": "Solo ADMIN y perfil demo/local. No escribe reservas."
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "SESSION"
+      },
+      "csrf": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-XSRF-TOKEN",
+        "description": "Desde cookie XSRF-TOKEN preparada/renovada por GET /api/session"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "role": {
+            "enum": [
+              "USER",
+              "ADMIN"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "role"
+        ]
+      },
+      "Session": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "authenticated": {
+                "const": false
+              }
+            },
+            "required": [
+              "authenticated"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "authenticated": {
+                "const": true
+              },
+              "user": {
+                "$ref": "#/components/schemas/User"
+              }
+            },
+            "required": [
+              "authenticated",
+              "user"
+            ]
+          }
+        ],
+        "examples": [
+          {
+            "authenticated": true,
+            "user": {
+              "id": "20000000-0000-4000-8000-000000000001",
+              "username": "usuario-demo",
+              "role": "USER"
+            }
+          }
+        ]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "CreateBookingRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "commandId",
+          "resourceId",
+          "startsAt",
+          "endsAt",
+          "title"
+        ],
+        "examples": [
+          {
+            "commandId": "30000000-0000-4000-8000-000000000001",
+            "resourceId": "10000000-0000-4000-8000-000000000001",
+            "startsAt": "2026-10-28T08:00:00Z",
+            "endsAt": "2026-10-28T09:00:00Z",
+            "title": "Reunión Prisma"
+          }
+        ]
+      },
+      "CancelBookingRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "commandId",
+          "resourceId"
+        ],
+        "examples": [
+          {
+            "commandId": "30000000-0000-4000-8000-000000000001",
+            "resourceId": "10000000-0000-4000-8000-000000000001",
+            "reason": null
+          }
+        ]
+      },
+      "SetResourceStatusRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "commandId",
+          "active",
+          "reason",
+          "expectedVersion"
+        ],
+        "examples": [
+          {
+            "commandId": "30000000-0000-4000-8000-000000000001",
+            "active": false,
+            "reason": "Mantenimiento",
+            "expectedVersion": 0
+          }
+        ]
+      },
+      "Accepted": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "requestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "transportStatus": {
+            "const": "ACCEPTED"
+          },
+          "operationUrl": {
+            "type": "string",
+            "pattern": "^/api/operations/[0-9a-f-]{36}$"
+          }
+        },
+        "required": [
+          "commandId",
+          "requestHash",
+          "transportStatus",
+          "operationUrl"
+        ],
+        "examples": [
+          {
+            "commandId": "30000000-0000-4000-8000-000000000001",
+            "requestHash": "3bd360463c43aa7e2f23b157e6d280740b6ebbe49dec7d4ef5a04857d2ccece0",
+            "transportStatus": "ACCEPTED",
+            "operationUrl": "/api/operations/30000000-0000-4000-8000-000000000001"
+          }
+        ]
+      },
+      "CanonicalRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "CreateBooking"
+              },
+              "resourceId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "payload": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "startsAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+                  },
+                  "endsAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "startsAt",
+                  "endsAt",
+                  "title"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "resourceId",
+              "payload"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "CancelBooking"
+              },
+              "resourceId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "payload": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "bookingId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "reason": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 0,
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "bookingId"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "resourceId",
+              "payload"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "SetResourceStatus"
+              },
+              "resourceId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "payload": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "active",
+                  "reason",
+                  "expectedVersion"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "resourceId",
+              "payload"
+            ]
+          }
+        ]
+      },
+      "OperationResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "requestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "outcome": {
+            "enum": [
+              "SUCCEEDED",
+              "REJECTED"
+            ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "bookingId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resourceVersion": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "processedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "canonicalRequest": {
+            "$ref": "#/components/schemas/CanonicalRequest"
+          },
+          "alreadyCancelled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "commandId",
+          "requestHash",
+          "outcome",
+          "reasonCode",
+          "resourceId",
+          "bookingId",
+          "resourceVersion",
+          "processedAt",
+          "canonicalRequest"
+        ],
+        "examples": [
+          {
+            "commandId": "30000000-0000-4000-8000-000000000001",
+            "requestHash": "3bd360463c43aa7e2f23b157e6d280740b6ebbe49dec7d4ef5a04857d2ccece0",
+            "outcome": "SUCCEEDED",
+            "reasonCode": "CONFIRMED",
+            "resourceId": "10000000-0000-4000-8000-000000000001",
+            "bookingId": "60000000-0000-4000-8000-000000000001",
+            "resourceVersion": 1,
+            "processedAt": "2026-10-27T10:00:01Z",
+            "canonicalRequest": {
+              "type": "CreateBooking",
+              "resourceId": "10000000-0000-4000-8000-000000000001",
+              "payload": {
+                "startsAt": "2026-10-28T08:00:00Z",
+                "endsAt": "2026-10-28T09:00:00Z",
+                "title": "Reunión Prisma"
+              }
+            }
+          }
+        ]
+      },
+      "ApiError": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "fieldErrors": {
+            "type": "object",
+            "maxProperties": 20,
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "maxItems": 10
+            }
+          },
+          "traceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "requestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "traceId"
+        ],
+        "examples": [
+          {
+            "code": "OPERATION_NOT_OBSERVED",
+            "message": "No hay resultado disponible",
+            "traceId": "50000000-0000-4000-8000-000000000001"
+          }
+        ]
+      },
+      "Resource": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "type": {
+            "enum": [
+              "ROOM",
+              "EQUIPMENT"
+            ]
+          },
+          "capacity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 2000
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "resourceVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "imageUrl": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^/assets/[a-zA-Z0-9/_.-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "type",
+          "capacity",
+          "description",
+          "active",
+          "resourceVersion"
+        ],
+        "examples": [
+          {
+            "id": "10000000-0000-4000-8000-000000000001",
+            "code": "SALA-ATLAS",
+            "name": "Sala Atlas",
+            "type": "ROOM",
+            "capacity": 8,
+            "description": "Sala con pantalla",
+            "active": true,
+            "resourceVersion": 0
+          }
+        ]
+      },
+      "OccupiedInterval": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "startsAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          }
+        },
+        "required": [
+          "startsAt",
+          "endsAt"
+        ]
+      },
+      "AvailabilityDay": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "opensAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "closesAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "anchors": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+            },
+            "maxItems": 57
+          }
+        },
+        "required": [
+          "date",
+          "opensAt",
+          "closesAt",
+          "anchors"
+        ]
+      },
+      "Availability": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "resourceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "resourceVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "timezone": {
+            "const": "Europe/Madrid"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityDay"
+            },
+            "maxItems": 31
+          },
+          "occupied": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OccupiedInterval"
+            }
+          }
+        },
+        "required": [
+          "resourceId",
+          "active",
+          "resourceVersion",
+          "timezone",
+          "days",
+          "occupied"
+        ],
+        "examples": [
+          {
+            "resourceId": "10000000-0000-4000-8000-000000000001",
+            "active": true,
+            "resourceVersion": 0,
+            "timezone": "Europe/Madrid",
+            "days": [
+              {
+                "date": "2026-10-28",
+                "opensAt": "2026-10-28T07:00:00Z",
+                "closesAt": "2026-10-28T21:00:00Z",
+                "anchors": [
+                  "2026-10-28T07:00:00Z",
+                  "2026-10-28T07:15:00Z"
+                ]
+              }
+            ],
+            "occupied": []
+          }
+        ]
+      },
+      "Booking": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 100
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "status": {
+            "enum": [
+              "CONFIRMED",
+              "CANCELLED"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "cancelledAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "resourceId",
+          "ownerId",
+          "title",
+          "startsAt",
+          "endsAt",
+          "status",
+          "createdAt",
+          "cancelledAt",
+          "version"
+        ],
+        "examples": [
+          {
+            "id": "60000000-0000-4000-8000-000000000001",
+            "resourceId": "10000000-0000-4000-8000-000000000001",
+            "ownerId": "20000000-0000-4000-8000-000000000001",
+            "title": "Reunión Prisma",
+            "startsAt": "2026-10-28T08:00:00Z",
+            "endsAt": "2026-10-28T09:00:00Z",
+            "status": "CONFIRMED",
+            "createdAt": "2026-10-27T10:00:01Z",
+            "cancelledAt": null,
+            "version": 0
+          }
+        ]
+      },
+      "AuditEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "actorId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "requestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "action": {
+            "enum": [
+              "CreateBooking",
+              "CancelBooking",
+              "SetResourceStatus"
+            ]
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "bookingId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outcome": {
+            "enum": [
+              "SUCCEEDED",
+              "REJECTED"
+            ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 0,
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          }
+        },
+        "required": [
+          "id",
+          "actorId",
+          "commandId",
+          "requestHash",
+          "action",
+          "resourceId",
+          "bookingId",
+          "outcome",
+          "reasonCode",
+          "reason",
+          "occurredAt"
+        ],
+        "examples": [
+          {
+            "id": "70000000-0000-4000-8000-000000000001",
+            "actorId": "20000000-0000-4000-8000-000000000001",
+            "commandId": "30000000-0000-4000-8000-000000000001",
+            "requestHash": "3bd360463c43aa7e2f23b157e6d280740b6ebbe49dec7d4ef5a04857d2ccece0",
+            "action": "CreateBooking",
+            "resourceId": "10000000-0000-4000-8000-000000000001",
+            "bookingId": "60000000-0000-4000-8000-000000000001",
+            "outcome": "SUCCEEDED",
+            "reasonCode": "CONFIRMED",
+            "reason": null,
+            "occurredAt": "2026-10-27T10:00:01Z"
+          }
+        ]
+      },
+      "ConsumerStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "enum": [
+              "RUNNING",
+              "PAUSED",
+              "UNKNOWN"
+            ]
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          }
+        },
+        "required": [
+          "state",
+          "observedAt"
+        ],
+        "examples": [
+          {
+            "state": "PAUSED",
+            "observedAt": "2026-10-27T10:00:01Z"
+          }
+        ]
+      },
+      "DemoStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "api": {
+            "enum": [
+              "UP",
+              "DOWN",
+              "UNKNOWN"
+            ]
+          },
+          "booking": {
+            "enum": [
+              "UP",
+              "DOWN",
+              "UNKNOWN"
+            ]
+          },
+          "kafka": {
+            "enum": [
+              "UP",
+              "DOWN",
+              "UNKNOWN"
+            ]
+          },
+          "database": {
+            "enum": [
+              "UP",
+              "DOWN",
+              "UNKNOWN"
+            ]
+          },
+          "consumer": {
+            "enum": [
+              "RUNNING",
+              "PAUSED",
+              "UNKNOWN"
+            ]
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          }
+        },
+        "required": [
+          "api",
+          "booking",
+          "kafka",
+          "database",
+          "consumer",
+          "observedAt"
+        ],
+        "examples": [
+          {
+            "api": "UP",
+            "booking": "UP",
+            "kafka": "UP",
+            "database": "UP",
+            "consumer": "RUNNING",
+            "observedAt": "2026-10-27T10:00:01Z"
+          }
+        ]
+      },
+      "CommandCompleted": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "type": {
+            "const": "CommandCompleted"
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "actorId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "requestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "outcome": {
+            "enum": [
+              "SUCCEEDED",
+              "REJECTED"
+            ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+          },
+          "bookingId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "resourceVersion": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "traceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "type",
+          "eventId",
+          "commandId",
+          "actorId",
+          "requestHash",
+          "outcome",
+          "reasonCode",
+          "bookingId",
+          "resourceId",
+          "resourceVersion",
+          "occurredAt",
+          "traceId"
+        ],
+        "examples": [
+          {
+            "schemaVersion": 1,
+            "type": "CommandCompleted",
+            "eventId": "70000000-0000-4000-8000-000000000001",
+            "commandId": "30000000-0000-4000-8000-000000000001",
+            "actorId": "20000000-0000-4000-8000-000000000001",
+            "requestHash": "3bd360463c43aa7e2f23b157e6d280740b6ebbe49dec7d4ef5a04857d2ccece0",
+            "outcome": "SUCCEEDED",
+            "reasonCode": "CONFIRMED",
+            "bookingId": "60000000-0000-4000-8000-000000000001",
+            "resourceId": "10000000-0000-4000-8000-000000000001",
+            "resourceVersion": 1,
+            "occurredAt": "2026-10-27T10:00:01Z",
+            "traceId": "50000000-0000-4000-8000-000000000001"
+          }
+        ]
+      },
+      "AvailabilityChanged": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "type": {
+            "const": "ResourceAvailabilityChanged"
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "resourceVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "type",
+          "eventId",
+          "resourceId",
+          "resourceVersion",
+          "occurredAt"
+        ],
+        "examples": [
+          {
+            "schemaVersion": 1,
+            "type": "ResourceAvailabilityChanged",
+            "eventId": "70000000-0000-4000-8000-000000000001",
+            "resourceId": "10000000-0000-4000-8000-000000000001",
+            "resourceVersion": 1,
+            "occurredAt": "2026-10-27T10:00:01Z"
+          }
+        ]
+      },
+      "ResourcePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Resource"
+            },
+            "maxItems": 100
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "totalElements": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "totalElements"
+        ],
+        "examples": [
+          {
+            "items": [
+              {
+                "id": "10000000-0000-4000-8000-000000000001",
+                "code": "SALA-ATLAS",
+                "name": "Sala Atlas",
+                "type": "ROOM",
+                "capacity": 8,
+                "description": "Sala con pantalla",
+                "active": true,
+                "resourceVersion": 0
+              }
+            ],
+            "page": 0,
+            "size": 20,
+            "totalElements": 1
+          }
+        ]
+      },
+      "BookingPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Booking"
+            },
+            "maxItems": 100
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "totalElements": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "totalElements"
+        ],
+        "examples": [
+          {
+            "items": [
+              {
+                "id": "60000000-0000-4000-8000-000000000001",
+                "resourceId": "10000000-0000-4000-8000-000000000001",
+                "ownerId": "20000000-0000-4000-8000-000000000001",
+                "title": "Reunión Prisma",
+                "startsAt": "2026-10-28T08:00:00Z",
+                "endsAt": "2026-10-28T09:00:00Z",
+                "status": "CONFIRMED",
+                "createdAt": "2026-10-27T10:00:01Z",
+                "cancelledAt": null,
+                "version": 0
+              }
+            ],
+            "page": 0,
+            "size": 20,
+            "totalElements": 1
+          }
+        ]
+      },
+      "AuditEntryPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEntry"
+            },
+            "maxItems": 100
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "totalElements": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "totalElements"
+        ],
+        "examples": [
+          {
+            "items": [
+              {
+                "id": "70000000-0000-4000-8000-000000000001",
+                "actorId": "20000000-0000-4000-8000-000000000001",
+                "commandId": "30000000-0000-4000-8000-000000000001",
+                "requestHash": "3bd360463c43aa7e2f23b157e6d280740b6ebbe49dec7d4ef5a04857d2ccece0",
+                "action": "CreateBooking",
+                "resourceId": "10000000-0000-4000-8000-000000000001",
+                "bookingId": "60000000-0000-4000-8000-000000000001",
+                "outcome": "SUCCEEDED",
+                "reasonCode": "CONFIRMED",
+                "reason": null,
+                "occurredAt": "2026-10-27T10:00:01Z"
+              }
+            ],
+            "page": 0,
+            "size": 20,
+            "totalElements": 1
+          }
+        ]
+      }
+    },
+    "responses": {
+      "INVALID_REQUEST": {
+        "description": "Formato o límites inválidos",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "code": "INVALID_REQUEST",
+              "message": "Formato o límites inválidos",
+              "traceId": "50000000-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      },
+      "AUTHENTICATION_REQUIRED": {
+        "description": "Acceso requerido",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "code": "AUTHENTICATION_REQUIRED",
+              "message": "Acceso requerido",
+              "traceId": "50000000-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      },
+      "FORBIDDEN": {
+        "description": "Acceso prohibido",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "code": "FORBIDDEN",
+              "message": "Acceso prohibido",
+              "traceId": "50000000-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      },
+      "PAYLOAD_TOO_LARGE": {
+        "description": "Cuerpo demasiado grande",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "code": "PAYLOAD_TOO_LARGE",
+              "message": "Cuerpo demasiado grande",
+              "traceId": "50000000-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      },
+      "SERVICE_UNAVAILABLE": {
+        "description": "Dependencia no disponible",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "code": "SERVICE_UNAVAILABLE",
+              "message": "Dependencia no disponible",
+              "traceId": "50000000-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      },
+      "NOT_FOUND": {
+        "description": "Recurso no encontrado",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "code": "NOT_FOUND",
+              "message": "Recurso no encontrado",
+              "traceId": "50000000-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      },
+      "Accepted": {
+        "description": "Acuse Kafka; no confirma la reserva",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Accepted"
+            }
+          }
+        },
+        "headers": {
+          "Location": {
+            "description": "Ruta propia de seguimiento",
+            "schema": {
+              "type": "string",
+              "pattern": "^/api/operations/[0-9a-f-]{36}$"
+            }
+          }
+        }
+      },
+      "NOT_ACCEPTED": {
+        "description": "Fallo anterior al intento de publicación",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "code": "NOT_ACCEPTED",
+              "message": "Fallo anterior al intento de publicación",
+              "traceId": "50000000-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      },
+      "DELIVERY_UNCERTAIN": {
+        "description": "DELIVERY_UNCERTAIN: el envío podría producir efecto",
+        "content": {
+          "application/json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ApiError"
+                },
+                {
+                  "required": [
+                    "commandId",
+                    "requestHash"
+                  ],
+                  "properties": {
+                    "code": {
+                      "const": "DELIVERY_UNCERTAIN"
+                    }
+                  }
+                }
+              ]
+            },
+            "example": {
+              "code": "DELIVERY_UNCERTAIN",
+              "message": "Entrega incierta",
+              "traceId": "50000000-0000-4000-8000-000000000001",
+              "commandId": "30000000-0000-4000-8000-000000000001",
+              "requestHash": "3bd360463c43aa7e2f23b157e6d280740b6ebbe49dec7d4ef5a04857d2ccece0"
+            }
+          }
+        }
+      },
+      "OPERATION_NOT_OBSERVED": {
+        "description": "No hay resultado disponible",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "code": "OPERATION_NOT_OBSERVED",
+              "message": "No hay resultado disponible",
+              "traceId": "50000000-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      },
+      "IDEMPOTENCY_CONFLICT": {
+        "description": "La identidad tiene otra huella",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "code": "IDEMPOTENCY_CONFLICT",
+              "message": "La identidad tiene otra huella",
+              "traceId": "50000000-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      },
+      "STREAM_LIMIT": {
+        "description": "Límite de streams alcanzado",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "code": "STREAM_LIMIT",
+              "message": "Límite de streams alcanzado",
+              "traceId": "50000000-0000-4000-8000-000000000001"
+            }
+          }
+        }
+      }
+    }
+  }
+}

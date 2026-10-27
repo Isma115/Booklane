@@ -1,0 +1,95 @@
+[
+    {
+        "file":  "CreateBooking.json",
+        "schema":  "commands-v1.schema.json",
+        "valid":  true
+    },
+    {
+        "file":  "CancelBooking.json",
+        "schema":  "commands-v1.schema.json",
+        "valid":  true
+    },
+    {
+        "file":  "SetResourceStatus.json",
+        "schema":  "commands-v1.schema.json",
+        "valid":  true
+    },
+    {
+        "file":  "CommandCompleted.json",
+        "schema":  "events-v1.schema.json",
+        "valid":  true
+    },
+    {
+        "file":  "ResourceAvailabilityChanged.json",
+        "schema":  "events-v1.schema.json",
+        "valid":  true
+    },
+    {
+        "file":  "FailedMessage.json",
+        "schema":  "failed-v1.schema.json",
+        "valid":  true
+    },
+    {
+        "file":  "invalid-actor-role.json",
+        "schema":  "commands-v1.schema.json",
+        "valid":  false,
+        "keyword":  "enum",
+        "path":  "/actorRole",
+        "branch":  0
+    },
+    {
+        "file":  "invalid-title.json",
+        "schema":  "commands-v1.schema.json",
+        "valid":  false,
+        "keyword":  "minLength",
+        "path":  "/payload/title",
+        "branch":  0
+    },
+    {
+        "file":  "invalid-subseconds.json",
+        "schema":  "commands-v1.schema.json",
+        "valid":  false,
+        "keyword":  "pattern",
+        "path":  "/payload/startsAt",
+        "branch":  0
+    },
+    {
+        "file":  "invalid-type.json",
+        "schema":  "commands-v1.schema.json",
+        "valid":  false,
+        "keyword":  "const",
+        "path":  "/type",
+        "branch":  0
+    },
+    {
+        "file":  "invalid-extra-field.json",
+        "schema":  "events-v1.schema.json",
+        "valid":  false,
+        "keyword":  "additionalProperties",
+        "path":  "",
+        "branch":  1
+    },
+    {
+        "file":  "invalid-payload-kind.json",
+        "schema":  "commands-v1.schema.json",
+        "valid":  false,
+        "keyword":  "required",
+        "path":  "/payload",
+        "branch":  1
+    },
+    {
+        "file":  "invalid-version.json",
+        "schema":  "commands-v1.schema.json",
+        "valid":  false,
+        "keyword":  "minimum",
+        "path":  "/payload/expectedVersion",
+        "branch":  2
+    },
+    {
+        "file":  "invalid-diagnostic-secret.json",
+        "schema":  "failed-v1.schema.json",
+        "valid":  false,
+        "keyword":  "additionalProperties",
+        "path":  ""
+    }
+]

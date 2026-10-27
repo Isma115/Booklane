@@ -6,7 +6,7 @@ El proyecto está en preparación. Existen los tres módulos Java y la base Angu
 
 ## Requisitos y versiones elegidas
 
-Matriz contrastada el 27/10/2026. Esta base de implementación todavía no demuestra un build o una integración correctos.
+Matriz contrastada el 27/10/2026. Los builds de base Java/Angular y contratos están verificados; todavía no hay integración completa de negocio.
 
 | Componente | Versión elegida | Referencia |
 | --- | --- | --- |
@@ -72,7 +72,7 @@ Desde la raíz, después de seleccionar el JDK 21:
 
 En Linux/macOS con JDK 21: `./mvnw -B -ntp verify`. El Wrapper descarga Maven 3.9.16 y valida su SHA-256. Requiere acceso a Maven Central la primera vez.
 
-El agregador construye `contracts-java`, `booklane-api` (WebFlux/Netty) y `booklane-booking` (MVC/Hibernate). Surefire ejecuta `*Test`; Failsafe reserva `*IT` para las pruebas de integración futuras. Actualmente hay cuatro pruebas de contexto/arquitectura, sin pruebas de persistencia o Kafka. El módulo de protocolo todavía está vacío hasta T004.
+El agregador construye `contracts-java`, `booklane-api` (WebFlux/Netty) y `booklane-booking` (MVC/Hibernate). Surefire ejecuta `*Test`; Failsafe reserva `*IT` para las pruebas de integración futuras. Actualmente hay 14 pruebas Java: diez de protocolo/huella y cuatro de contexto/arquitectura, sin pruebas de persistencia o Kafka. contracts-java contiene records wire, normalización SHA-256 y serialización explícita.
 
 Las pruebas arrancan servidores locales en puertos aleatorios y con perfil `isolated`. Solo en los recursos de test de booking se excluye DataSource: no se usa H2 y no se simula una conexión satisfactoria a PostgreSQL. Fuera de las pruebas, booking requiere su futura configuración PostgreSQL. No hay endpoints de negocio ni autenticación definitiva.
 
@@ -112,3 +112,15 @@ Node 24.19.0/npm 11.17.0. La página inicial standalone carga de forma lazy. El 
 El servidor solo escucha en http://127.0.0.1:4200 y reenvía /api/** a la API local en 127.0.0.1:8081, sin conectar con booking. Playwright inicia/detiene su servidor y requiere el puerto libre. El humo funciona sin backend. Más detalle en [frontend/README.md](frontend/README.md).
 
 T003 ajusta la matriz con autorización del desarrollador: Angular framework/compiler 22.2.3, CLI/build 22.2.4 y Vitest 4.1.12 corrigen alertas de la resolución 22.0. Material/CDK permanece en 22.0.7, con peers compatibles. Un override acotado fija Vite de Angular build en 8.3.3 por sus [correcciones de seguridad](https://github.com/vitejs/vite/releases/tag/v8.3.3); retirarlo cuando build incorpore una versión corregida y repetir las comprobaciones. No se aplicó audit fix --force.
+
+## Contratos y verificación de preparación
+
+Los contratos HTTP público/interno y JSON Schema v1 están en [contracts](contracts/README.md), con ejemplos positivos y negativos. 202 es acuse Kafka; el resultado persistido se recuperará por consulta propia. No hay endpoints funcionales todavía.
+
+Para verificar contratos y sus consumidores, seleccionar JDK 21, ejecutar npm ci en frontend y disponer de Python 3.11+ (comprobado con 3.11.0). Desde la raíz:
+
+~~~powershell
+.\scripts\verify-contracts.ps1
+~~~
+
+Los validadores Python se instalan con versiones exactas en .local/contracts-venv, sin cambios globales. El comando ejecuta Maven, valida contratos/ejemplos y JSON realmente serializado, comprueba los tipos Angular y ejecuta sus pruebas/build. En T004 pasaron 14 tests Java, dos Angular, ambos OpenAPI, tres JSON Schema y seis rechazos de dependencias prohibidas. La prueba Chromium de T003 sigue siendo solo humo de base, no una reserva real.

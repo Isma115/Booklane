@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "type": "ResourceAvailabilityChanged",
+  "eventId": "70000000-0000-4000-8000-000000000001",
+  "resourceId": "10000000-0000-4000-8000-000000000001",
+  "resourceVersion": 1,
+  "occurredAt": "2026-10-27T10:00:01Z",
+  "title": "Privado"
+}
