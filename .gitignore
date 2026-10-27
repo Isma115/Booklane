@@ -1,0 +1,69 @@
+# Secretos y configuracion local generada
+.local/
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Maven y Java (conservar el Wrapper)
+target/
+.m2/
+*.class
+*.jar
+*.war
+*.ear
+!/.mvn/wrapper/maven-wrapper.jar
+*.hprof
+hs_err_pid*
+replay_pid*
+
+# Angular, Node y caches
+node_modules/
+dist/
+out-tsc/
+.angular/
+.npm/
+.cache/
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+
+# Resultados de pruebas generados
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+**/playwright/.cache/
+**/playwright/.auth/
+
+# Logs, volcados y temporales
+logs/
+*.log
+*.dump
+*.sql.gz
+/tmp/
+/temp/
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# Configuracion personal de editores
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+Desktop.ini
