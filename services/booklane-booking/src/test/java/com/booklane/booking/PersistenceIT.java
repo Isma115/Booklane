@@ -4,6 +4,16 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import com.booklane.booking.application.CommandOutcome;
+import com.booklane.booking.application.CommandProcessor;
+import com.booklane.booking.application.CommandRequest;
+import com.booklane.booking.application.ProcessingResult;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -49,13 +59,89 @@ class PersistenceIT {
                     assertThat(query.next()).isTrue();
                     assertThat(query.getObject(1, java.time.OffsetDateTime.class).toInstant()).isEqualTo(Instant.parse("2027-01-01T09:00:00Z"));
                 }
+                verifyClaims(app.getBean(CommandProcessor.class), db);
             }
             try (var app = start(postgres); var db = connect(postgres)) {
                 assertThat(number(db, "SELECT count(*) FROM booking.resources")).isEqualTo(5);
                 assertThat(number(db, "SELECT count(*) FROM booking.bookings")).isEqualTo(3);
-                assertThat(number(db, "SELECT count(*) FROM booking.command_results")).isEqualTo(1);
-                assertThat(number(db, "SELECT count(*) FROM booking.flyway_schema_history WHERE success")).isEqualTo(3);
+                assertThat(number(db, "SELECT count(*) FROM booking.command_results")).isEqualTo(2);
+                assertThat(number(db, "SELECT count(*) FROM booking.flyway_schema_history WHERE success")).isEqualTo(4);
             }
+        }
+    }
+
+    private static void verifyClaims(CommandProcessor processor, Connection db) throws Exception {
+        UUID actor = UUID.randomUUID();
+        UUID command = UUID.randomUUID();
+        var first = new CommandRequest(actor, command, "b".repeat(64), "CreateBooking",
+                UUID.fromString(RESOURCE), "{}", UUID.randomUUID());
+        var changed = new CommandRequest(actor, command, "c".repeat(64), "CreateBooking",
+                UUID.fromString("10000000-0000-4000-8000-000000000002"), "{}", UUID.randomUUID());
+        var outcome = new CommandOutcome(CommandOutcome.Status.REJECTED, "NOT_FOUND", null, null, null,
+                Instant.parse("2027-01-01T08:00:00Z"));
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var secondStarted = new CountDownLatch(1);
+        var calls = new AtomicInteger();
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var original = executor.submit(() -> processor.process(first, request -> {
+                calls.incrementAndGet();
+                entered.countDown();
+                try {
+                    if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("race timed out");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+                return outcome;
+            }));
+            try {
+                assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
+                var duplicate = executor.submit(() -> {
+                    secondStarted.countDown();
+                    return processor.process(changed, request -> { calls.incrementAndGet(); return outcome; });
+                });
+                assertThat(secondStarted.await(10, TimeUnit.SECONDS)).isTrue();
+                assertThatThrownBy(() -> duplicate.get(500, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
+                release.countDown();
+                assertThat(original.get(10, TimeUnit.SECONDS).state()).isEqualTo(ProcessingResult.State.PROCESSED);
+                assertThat(duplicate.get(10, TimeUnit.SECONDS).state()).isEqualTo(ProcessingResult.State.IDEMPOTENCY_CONFLICT);
+            } finally {
+                release.countDown();
+            }
+        }
+        assertThat(calls).hasValue(1);
+        assertThat(processor.process(first, request -> { throw new AssertionError("replay called handler"); }).outcome()).isEqualTo(outcome);
+        assertThat(processor.process(changed, request -> { throw new AssertionError("conflict called handler"); }).state())
+                .isEqualTo(ProcessingResult.State.IDEMPOTENCY_CONFLICT);
+        assertThat(number(db, "SELECT count(*) FROM booking.audit_entries WHERE command_id = '" + command + "'")).isEqualTo(2);
+        assertThat(number(db, "SELECT count(*) FROM booking.outbox_events WHERE payload->>'commandId' = '" + command + "'")).isEqualTo(2);
+        assertThat(number(db, "SELECT count(*) FROM booking.outbox_events WHERE payload->>'requestHash' = '" + changed.requestHash() + "' AND payload->>'reasonCode' = 'IDEMPOTENCY_CONFLICT'")).isEqualTo(1);
+        assertThat(number(db, "SELECT count(*) FROM booking.command_results WHERE command_id = '" + command + "' AND request_hash = '" + first.requestHash() + "'")).isEqualTo(1);
+
+        var failure = new CommandRequest(actor, UUID.randomUUID(), "d".repeat(64), "CreateBooking",
+                UUID.fromString(RESOURCE), "{}", UUID.randomUUID());
+        assertThatThrownBy(() -> processor.process(failure, request -> { throw new IllegalStateException("test rollback"); }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(number(db, "SELECT count(*) FROM booking.command_results WHERE command_id = '" + failure.commandId() + "'")).isZero();
+        execute(db, "ALTER TABLE booking.outbox_events ADD CONSTRAINT test_reject_outbox CHECK (false) NOT VALID");
+        try {
+            assertThatThrownBy(() -> processor.process(failure, request -> outcome)).isInstanceOf(RuntimeException.class);
+            assertThat(number(db, "SELECT count(*) FROM booking.command_results WHERE command_id = '" + failure.commandId() + "'")).isZero();
+            assertThat(number(db, "SELECT count(*) FROM booking.audit_entries WHERE command_id = '" + failure.commandId() + "'")).isZero();
+            assertThat(number(db, "SELECT count(*) FROM booking.outbox_events WHERE payload->>'commandId' = '" + failure.commandId() + "'")).isZero();
+        } finally {
+            execute(db, "ALTER TABLE booking.outbox_events DROP CONSTRAINT test_reject_outbox");
+        }
+        db.setAutoCommit(false);
+        try {
+            execute(db, "INSERT INTO booking.command_results (actor_id, command_id, request_hash, command_type, resource_id) VALUES ('"
+                    + actor + "','" + failure.commandId() + "','" + failure.requestHash() + "','CreateBooking','" + RESOURCE + "')");
+            assertThatThrownBy(db::commit).isInstanceOf(SQLException.class)
+                    .extracting(e -> ((SQLException) e).getSQLState()).isEqualTo("23514");
+            db.rollback();
+        } finally {
+            db.setAutoCommit(true);
         }
     }
 

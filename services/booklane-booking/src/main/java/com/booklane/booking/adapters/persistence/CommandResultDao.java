@@ -1,0 +1,90 @@
+package com.booklane.booking.adapters.persistence;
+
+import com.booklane.booking.application.CommandOutcome;
+import com.booklane.booking.application.CommandRequest;
+import com.booklane.booking.application.port.ReservationStore;
+import com.booklane.contracts.WireJson;
+import com.booklane.contracts.event.CommandCompletedEvent;
+import com.booklane.contracts.event.Outcome;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import java.time.Instant;
+import java.util.UUID;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public class CommandResultDao implements ReservationStore {
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    @Override
+    public boolean claim(CommandRequest request) {
+        return entityManager.createNativeQuery("""
+                INSERT INTO booking.command_results (actor_id, command_id, request_hash, command_type, resource_id)
+                VALUES (:actor, :command, :hash, :type, :resource)
+                ON CONFLICT (actor_id, command_id) DO NOTHING
+                """).setParameter("actor", request.actorId()).setParameter("command", request.commandId())
+                .setParameter("hash", request.requestHash()).setParameter("type", request.commandType())
+                .setParameter("resource", request.resourceId()).executeUpdate() == 1;
+    }
+
+    @Override
+    public StoredResult find(CommandRequest request) {
+        Object[] row = (Object[]) entityManager.createNativeQuery("""
+                SELECT request_hash, outcome, reason_code, booking_id, resource_version, already_cancelled, processed_at
+                FROM booking.command_results WHERE actor_id = :actor AND command_id = :command
+                """).setParameter("actor", request.actorId()).setParameter("command", request.commandId()).getSingleResult();
+        return new StoredResult((String) row[0], new CommandOutcome(CommandOutcome.Status.valueOf((String) row[1]),
+                (String) row[2], (UUID) row[3], row[4] == null ? null : ((Number) row[4]).longValue(),
+                (Boolean) row[5], (Instant) row[6]));
+    }
+
+    @Override
+    public void complete(CommandRequest request, CommandOutcome outcome) {
+        int updated = entityManager.createNativeQuery("""
+                UPDATE booking.command_results SET outcome = :outcome, reason_code = :reason,
+                    booking_id = :booking, resource_version = :version, already_cancelled = :cancelled,
+                    canonical_request = CAST(:canonical AS jsonb), processed_at = :processed
+                WHERE actor_id = :actor AND command_id = :command AND outcome IS NULL
+                """).setParameter("outcome", outcome.status().name()).setParameter("reason", outcome.reasonCode())
+                .setParameter("booking", outcome.bookingId()).setParameter("version", outcome.resourceVersion())
+                .setParameter("cancelled", outcome.alreadyCancelled()).setParameter("canonical", request.canonicalRequest())
+                .setParameter("processed", outcome.processedAt()).setParameter("actor", request.actorId())
+                .setParameter("command", request.commandId()).executeUpdate();
+        if (updated != 1) throw new IllegalStateException("claim was not available for completion");
+        insertAudit(request, request.commandType(), outcome.status().name(), outcome.reasonCode(),
+                outcome.bookingId(), outcome.processedAt());
+        insertEvent(request, outcome.status(), outcome.reasonCode(), outcome.bookingId(), outcome.resourceVersion(), outcome.processedAt());
+    }
+
+    @Override
+    public void recordConflict(CommandRequest request, Instant occurredAt) {
+        if (insertAudit(request, "IDEMPOTENCY_CONFLICT", "REJECTED", "IDEMPOTENCY_CONFLICT", null, occurredAt)) {
+            insertEvent(request, CommandOutcome.Status.REJECTED, "IDEMPOTENCY_CONFLICT", null, null, occurredAt);
+        }
+    }
+
+    private boolean insertAudit(CommandRequest request, String action, String outcome, String reason, UUID booking, Instant at) {
+        return entityManager.createNativeQuery("""
+                INSERT INTO booking.audit_entries (id, actor_id, command_id, request_hash, action,
+                    resource_id, booking_id, outcome, reason, occurred_at)
+                VALUES (:id, :actor, :command, :hash, :action, :resource, :booking, :outcome, :reason, :at)
+                ON CONFLICT (actor_id, command_id, request_hash, action) DO NOTHING
+                """).setParameter("id", UUID.randomUUID()).setParameter("actor", request.actorId())
+                .setParameter("command", request.commandId()).setParameter("hash", request.requestHash())
+                .setParameter("action", action).setParameter("resource", request.resourceId()).setParameter("booking", booking)
+                .setParameter("outcome", outcome).setParameter("reason", reason).setParameter("at", at).executeUpdate() == 1;
+    }
+
+    private void insertEvent(CommandRequest request, CommandOutcome.Status status, String reason,
+            UUID booking, Long version, Instant at) {
+        UUID eventId = UUID.randomUUID();
+        var event = new CommandCompletedEvent(1, "CommandCompleted", eventId, request.commandId(), request.actorId(),
+                request.requestHash(), Outcome.valueOf(status.name()), reason, booking, request.resourceId(), version, at, request.traceId());
+        entityManager.createNativeQuery("""
+                INSERT INTO booking.outbox_events (id, aggregate_id, event_type, payload, created_at)
+                VALUES (:id, :aggregate, 'CommandCompleted', CAST(:payload AS jsonb), :created)
+                """).setParameter("id", eventId).setParameter("aggregate", request.resourceId())
+                .setParameter("payload", WireJson.write(event)).setParameter("created", at).executeUpdate();
+    }
+}

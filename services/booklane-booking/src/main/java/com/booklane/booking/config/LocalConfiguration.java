@@ -2,6 +2,7 @@ package com.booklane.booking.config;
 
 import com.booklane.booking.security.DemoIdentityCatalog;
 import java.nio.file.Path;
+import java.time.Clock;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -12,6 +13,9 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(BookingProperties.class)
 public class LocalConfiguration {
+    @Bean
+    Clock clock() { return Clock.systemUTC(); }
+
     @Bean
     static BeanFactoryPostProcessor validateLocalConfiguration(ConfigurableEnvironment environment) {
         return factory -> {
