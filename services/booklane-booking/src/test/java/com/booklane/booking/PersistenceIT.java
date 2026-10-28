@@ -17,10 +17,12 @@ import com.booklane.booking.application.CommandProcessor;
 import com.booklane.booking.application.CommandRequest;
 import com.booklane.booking.application.ProcessingResult;
 import com.booklane.booking.application.CreateBookingHandler;
+import com.booklane.booking.application.CancelBookingHandler;
 import com.booklane.booking.domain.Actor;
 import com.booklane.contracts.RequestFingerprint;
 import com.booklane.contracts.command.CommandType;
 import com.booklane.contracts.command.CreateBookingPayload;
+import com.booklane.contracts.command.CancelBookingPayload;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -71,14 +73,83 @@ class PersistenceIT {
                 }
                 verifyClaims(app.getBean(CommandProcessor.class), db);
                 verifyCreation(app.getBean(CreateBookingHandler.class), db);
+                verifyCancellation(app.getBean(CancelBookingHandler.class), db);
             }
             try (var app = start(postgres); var db = connect(postgres)) {
                 assertThat(number(db, "SELECT count(*) FROM booking.resources")).isEqualTo(5);
-                assertThat(number(db, "SELECT count(*) FROM booking.bookings")).isEqualTo(6);
-                assertThat(number(db, "SELECT count(*) FROM booking.command_results")).isEqualTo(8);
+                assertThat(number(db, "SELECT count(*) FROM booking.bookings")).isEqualTo(7);
+                assertThat(number(db, "SELECT count(*) FROM booking.command_results")).isEqualTo(15);
                 assertThat(number(db, "SELECT count(*) FROM booking.flyway_schema_history WHERE success")).isEqualTo(4);
             }
         }
+    }
+
+    private static void verifyCancellation(CancelBookingHandler handler, Connection db) throws Exception {
+        UUID resource = UUID.fromString("10000000-0000-4000-8000-000000000002");
+        var alicia = new Actor(UUID.fromString(OWNER), Actor.Role.USER);
+        var bruno = new Actor(UUID.fromString("20000000-0000-4000-8000-000000000002"), Actor.Role.USER);
+        var admin = new Actor(UUID.fromString("20000000-0000-4000-8000-000000000003"), Actor.Role.ADMIN);
+        UUID own = uuid(db, "SELECT id FROM booking.bookings WHERE resource_id = '" + resource + "' AND starts_at = '2027-01-02T10:00:00Z'");
+        UUID other = uuid(db, "SELECT id FROM booking.bookings WHERE resource_id = '" + resource + "' AND starts_at = '2027-01-02T11:00:00Z'");
+        var unauthorized = cancelRequest(bruno, resource, own, null);
+        var denial = handler.cancel(unauthorized, bruno, own, null).outcome();
+        assertThat(denial.reasonCode()).isEqualTo("NOT_FOUND");
+        assertThat(denial.bookingId()).isNull();
+        assertThat(denial.resourceVersion()).isNull();
+        UUID wrongResource = UUID.fromString(RESOURCE);
+        var wrong = cancelRequest(alicia, wrongResource, own, null);
+        assertThat(handler.cancel(wrong, alicia, own, null).outcome().reasonCode()).isEqualTo("NOT_FOUND");
+
+        var cancel = cancelRequest(alicia, resource, own, null);
+        var done = handler.cancel(cancel, alicia, own, null).outcome();
+        assertThat(done.status()).isEqualTo(CommandOutcome.Status.SUCCEEDED);
+        assertThat(done.alreadyCancelled()).isFalse();
+        assertThat(done.resourceVersion()).isEqualTo(4);
+        assertThat(number(db, "SELECT version FROM booking.bookings WHERE id = '" + own + "'")).isEqualTo(1);
+        assertThat(number(db, "SELECT count(*) FROM booking.bookings WHERE id = '" + own + "' AND status = 'CONFIRMED'")).isZero();
+        var repeat = cancelRequest(alicia, resource, own, null);
+        var repeated = handler.cancel(repeat, alicia, own, null).outcome();
+        assertThat(repeated.alreadyCancelled()).isTrue();
+        assertThat(repeated.resourceVersion()).isEqualTo(4);
+        assertThat(number(db, "SELECT version FROM booking.bookings WHERE id = '" + own + "'")).isEqualTo(1);
+        assertThat(number(db, "SELECT count(*) FROM booking.outbox_events WHERE aggregate_id = '" + resource
+                + "' AND event_type = 'ResourceAvailabilityChanged' AND payload->>'resourceVersion' = '4'")).isEqualTo(1);
+
+        var badReason = cancelRequest(admin, resource, other, " ");
+        assertThat(handler.cancel(badReason, admin, other, " ").outcome().reasonCode()).isEqualTo("INVALID_REASON");
+        var adminCancel = cancelRequest(admin, resource, other, "Mantenimiento");
+        assertThat(handler.cancel(adminCancel, admin, other, "Mantenimiento").outcome().resourceVersion()).isEqualTo(5);
+        assertThat(number(db, "SELECT count(*) FROM booking.audit_entries WHERE command_id = '" + adminCancel.commandId()
+                + "' AND reason = 'Mantenimiento'")).isEqualTo(1);
+        assertThat(number(db, "SELECT version FROM booking.resources WHERE id = '" + resource + "'")).isEqualTo(5);
+
+        UUID started = UUID.randomUUID();
+        execute(db, booking(started.toString(), RESOURCE, "2027-01-01T08:00:00Z", "2027-01-01T09:00:00Z"));
+        var tooLate = cancelRequest(alicia, UUID.fromString(RESOURCE), started, null);
+        assertThat(handler.cancel(tooLate, alicia, started, null).outcome().reasonCode()).isEqualTo("ALREADY_STARTED");
+        assertThat(number(db, "SELECT count(*) FROM booking.bookings WHERE id = '" + started + "' AND status = 'CONFIRMED'")).isEqualTo(1);
+
+        UUID remaining = uuid(db, "SELECT id FROM booking.bookings WHERE resource_id = '" + resource + "' AND status = 'CONFIRMED'");
+        var failed = cancelRequest(admin, resource, remaining, "Mantenimiento");
+        execute(db, "ALTER TABLE booking.outbox_events ADD CONSTRAINT test_reject_cancel CHECK (false) NOT VALID");
+        try {
+            assertThatThrownBy(() -> handler.cancel(failed, admin, remaining, "Mantenimiento")).isInstanceOf(RuntimeException.class);
+            assertThat(number(db, "SELECT version FROM booking.resources WHERE id = '" + resource + "'")).isEqualTo(5);
+            assertThat(number(db, "SELECT count(*) FROM booking.bookings WHERE id = '" + remaining + "' AND status = 'CONFIRMED' AND version = 0")).isEqualTo(1);
+            assertThat(number(db, "SELECT count(*) FROM booking.command_results WHERE command_id = '" + failed.commandId() + "'")).isZero();
+        } finally {
+            execute(db, "ALTER TABLE booking.outbox_events DROP CONSTRAINT test_reject_cancel");
+        }
+    }
+
+    private static CommandRequest cancelRequest(Actor actor, UUID resource, UUID booking, String reason) {
+        var payload = new CancelBookingPayload(booking, reason);
+        return new CommandRequest(actor.id(), UUID.randomUUID(), RequestFingerprint.calculate(CommandType.CancelBooking, resource, payload),
+                "CancelBooking", resource, RequestFingerprint.canonicalJson(CommandType.CancelBooking, resource, payload), UUID.randomUUID());
+    }
+
+    private static UUID uuid(Connection db, String sql) throws SQLException {
+        try (var query = db.createStatement().executeQuery(sql)) { query.next(); return query.getObject(1, UUID.class); }
     }
 
     private static void verifyCreation(CreateBookingHandler handler, Connection db) throws Exception {

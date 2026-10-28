@@ -16,7 +16,10 @@ public interface ReservationStore {
     long createBooking(UUID bookingId, UUID resourceId, UUID ownerId, String title,
             Instant startsAt, Instant endsAt, Instant createdAt);
     void recordAvailabilityChange(UUID resourceId, long version, Instant occurredAt);
+    Optional<BookingState> lockBooking(UUID resourceId, UUID bookingId);
+    long cancelBooking(UUID resourceId, UUID bookingId, Instant cancelledAt);
 
     record StoredResult(String requestHash, CommandOutcome outcome) {}
     record ResourceState(boolean active, long version) {}
+    record BookingState(UUID ownerId, Instant startsAt, String status) {}
 }

@@ -112,16 +112,45 @@ public class CommandResultDao implements ReservationStore {
                 .setParameter("payload", WireJson.write(event)).setParameter("created", occurredAt).executeUpdate();
     }
 
+    @Override
+    public Optional<BookingState> lockBooking(UUID resourceId, UUID bookingId) {
+        var rows = entityManager.createNativeQuery("""
+                SELECT owner_id, starts_at, status FROM booking.bookings
+                WHERE resource_id = :resource AND id = :id FOR UPDATE
+                """).setParameter("resource", resourceId).setParameter("id", bookingId).getResultList();
+        if (rows.isEmpty()) return Optional.empty();
+        Object[] row = (Object[]) rows.getFirst();
+        return Optional.of(new BookingState((UUID) row[0], (Instant) row[1], (String) row[2]));
+    }
+
+    @Override
+    public long cancelBooking(UUID resourceId, UUID bookingId, Instant cancelledAt) {
+        int updated = entityManager.createNativeQuery("""
+                UPDATE booking.bookings SET status = 'CANCELLED', cancelled_at = :at, version = version + 1
+                WHERE id = :id AND resource_id = :resource AND status = 'CONFIRMED'
+                """).setParameter("at", cancelledAt).setParameter("id", bookingId)
+                .setParameter("resource", resourceId).executeUpdate();
+        if (updated != 1) throw new IllegalStateException("booking was not available for cancellation");
+        Number version = (Number) entityManager.createNativeQuery("""
+                UPDATE booking.resources SET version = version + 1 WHERE id = :id AND version < 9007199254740991
+                RETURNING version
+                """).setParameter("id", resourceId).getSingleResult();
+        return version.longValue();
+    }
+
     private boolean insertAudit(CommandRequest request, String action, String outcome, String reason, UUID booking, Instant at) {
         return entityManager.createNativeQuery("""
                 INSERT INTO booking.audit_entries (id, actor_id, command_id, request_hash, action,
                     resource_id, booking_id, outcome, reason, occurred_at)
-                VALUES (:id, :actor, :command, :hash, :action, :resource, :booking, :outcome, :reason, :at)
+                VALUES (:id, :actor, :command, :hash, :action, :resource, :booking, :outcome,
+                    CASE WHEN :action = 'CancelBooking' THEN COALESCE(CAST(:canonical AS jsonb)->'payload'->>'reason', :reason)
+                         ELSE :reason END, :at)
                 ON CONFLICT (actor_id, command_id, request_hash, action) DO NOTHING
                 """).setParameter("id", UUID.randomUUID()).setParameter("actor", request.actorId())
                 .setParameter("command", request.commandId()).setParameter("hash", request.requestHash())
                 .setParameter("action", action).setParameter("resource", request.resourceId()).setParameter("booking", booking)
-                .setParameter("outcome", outcome).setParameter("reason", reason).setParameter("at", at).executeUpdate() == 1;
+                .setParameter("outcome", outcome).setParameter("reason", reason).setParameter("canonical", request.canonicalRequest())
+                .setParameter("at", at).executeUpdate() == 1;
     }
 
     private void insertEvent(CommandRequest request, CommandOutcome.Status status, String reason,
