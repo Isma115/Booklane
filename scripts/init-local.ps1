@@ -53,7 +53,7 @@ $keys = @(
     'BOOKLANE_KAFKA_API_PASSWORD', 'BOOKLANE_KAFKA_BOOKING_PASSWORD',
     'BOOKLANE_KAFKA_PROVISIONER_PASSWORD', 'BOOKLANE_KAFKA_BROKER_PASSWORD'
 )
-$managedFiles = @('secrets.json', 'api.env', 'booking.env', 'postgres.env', 'kafka.env', 'provisioner.env')
+$managedFiles = @('secrets.json', 'api.env', 'booking.env', 'postgres.env', 'kafka.env', 'provisioner.env', 'broker.env')
 foreach ($file in $managedFiles) {
     $path = Join-Path $statePath $file
     if (Test-Path -LiteralPath $path) {
@@ -125,6 +125,9 @@ $derived = [ordered]@{
     }
     'provisioner.env' = [ordered]@{
         BOOKLANE_KAFKA_PROVISIONER_PASSWORD = $secrets.BOOKLANE_KAFKA_PROVISIONER_PASSWORD
+    }
+    'broker.env' = [ordered]@{
+        BOOKLANE_KAFKA_BROKER_PASSWORD = $secrets.BOOKLANE_KAFKA_BROKER_PASSWORD
     }
 }
 foreach ($file in $derived.Keys) {

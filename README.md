@@ -2,7 +2,7 @@
 
 Portfolio local de reservas automáticas de salas y equipos ficticios. Arquitectura prevista: Angular/RxJS, API Spring WebFlux, Kafka y servicio booking con Hibernate/PostgreSQL. Las lecturas usan REST interno y las notificaciones SSE.
 
-El proyecto está en preparación. Existen los tres módulos Java y la base Angular con pruebas. La infraestructura y las funciones de reservas se implementarán en las tareas siguientes. Todavía no hay un arranque completo de Booklane.
+El proyecto está en preparación. Existen los tres módulos Java y la base Angular con pruebas. La configuración de infraestructura PostgreSQL/Kafka está preparada, pendiente de validación real. Las funciones de reservas siguen pendientes; todavía no hay un arranque completo de Booklane.
 
 ## Requisitos y versiones elegidas
 
@@ -21,7 +21,7 @@ Matriz contrastada el 27/10/2026. Los builds de base Java/Angular y contratos es
 | PostgreSQL | Imagen `postgres:18.6-bookworm` | [Imagen oficial](https://hub.docker.com/_/postgres) |
 | Kafka | Imagen `apache/kafka:4.1.2`, KRaft | [Imagen oficial](https://kafka.apache.org/41/getting-started/docker/) |
 
-Spring Framework, Spring Security, Spring Kafka, cliente Kafka, Hibernate y demás dependencias gestionadas quedan bajo el BOM de Spring Boot, sin versiones independientes. Las imágenes tienen etiquetas concretas; aún no se han descargado ni probado y sus digests quedan para la infraestructura. El Wrapper y el lockfile Angular ya están versionados.
+Spring Framework, Spring Security, Spring Kafka, cliente Kafka, Hibernate y demás dependencias gestionadas quedan bajo el BOM de Spring Boot, sin versiones independientes. Compose fija las imágenes por etiqueta y digest; su funcionamiento queda pendiente de verificación real. El Wrapper y el lockfile Angular ya están versionados.
 
 ## Preparar Windows
 
@@ -60,7 +60,31 @@ docker desktop start
 docker info --format '{{.OSType}} {{.ServerVersion}}'
 ```
 
-El último comando debe indicar `linux`; disponer del cliente Docker no basta. No ejecutar todavía `docker compose up`: su configuración aún no existe. Para el frontend, usar los comandos indicados más abajo. Mantener secretos y configuraciones generadas en `.local`, excluido de Git.
+El último comando debe indicar `linux`; disponer del cliente Docker no basta. Para arrancar solo infraestructura, usar los comandos de la sección siguiente tras generar los secretos. Para el frontend, usar sus comandos más abajo. Mantener secretos y configuraciones generadas en `.local`, excluido de Git.
+
+## Infraestructura local
+
+Configuración preparada en T006, sin pruebas reales ejecutadas en esta continuación por el modo rápido del proyecto. Desde la raíz y con JDK 21/Docker Linux seleccionados:
+
+```powershell
+.\scripts\init-local.ps1
+docker compose -f infra/compose.yaml up -d
+docker compose -f infra/compose.yaml ps -a
+```
+
+PostgreSQL y Kafka usan volúmenes persistentes; Compose base no publica puertos al host. kafka-acl-bootstrap y kafka-provisioner deben terminar con código cero, además de la salud de ambos servidores. Son solo servicios de infraestructura: no se arrancan aplicaciones ni se habilitan reservas.
+
+Para ejecutar aplicaciones desde el host:
+
+```powershell
+docker compose -f infra/compose.yaml -f infra/compose.dev.yaml up -d
+```
+
+El overlay dev publica exclusivamente 127.0.0.1:15432 (PostgreSQL) y 127.0.0.1:19092 (Kafka). Kafka anuncia kafka:9092 a contenedores y 127.0.0.1:19092 al host; autentica mediante SASL PLAIN y aplica ACL por servicio. Es un laboratorio local sin cifrado de transporte. No publicar fuera de esta máquina.
+
+Para parar conservando datos, usar stop con los mismos archivos Compose. No usar down -v sobre datos que se quieran conservar ni borrar los secretos para corregir autenticación. init-local conserva los secretos existentes y genera también broker.env, exclusivo del bootstrap.
+
+La verificación real preparada se ejecuta con `.\scripts\verify-infra.ps1`: utiliza un proyecto aislado, comprueba transporte y reinicio, y elimina sus propios volúmenes al terminar. Requiere los puertos dev libres. No se ha ejecutado en esta continuación y no demuestra todavía un recorrido de reservas.
 
 ## Compilar y comprobar Java
 
@@ -91,7 +115,7 @@ El 27/10/2026 se verificaron Node 24.19.0, npm 11.17.0, WSL 2.7.11.0 y Docker Li
 
 Tras autorización de instalación se descargó Temurin 21.0.12.1+1 y se verificó su SHA-256 oficial: `f9d6e191ab098c0d416e7d588a24420a8621cd2f4720dab2459b8b7b2d2d8b4e`. Con la selección por terminal indicada, `java -version` devuelve Temurin 21.0.12.1+1 y `javac -version` devuelve 21.0.12.1. Docker Linux y Compose se comprobaron de nuevo correctamente. No se modificó el Java global.
 
-La planificación y el registro detallado se conservan localmente, excluidos de Git por la configuración existente. Entorno y base Java verificados; véase también la base Angular. Las funciones de negocio y su infraestructura siguen pendientes.
+La planificación y el registro detallado se conservan localmente, excluidos de Git por la configuración existente. Entorno y base Java verificados; véase también la base Angular. Las funciones de negocio siguen pendientes.
 
 ## Base Angular
 
@@ -161,4 +185,4 @@ $env:SPRING_PROFILES_ACTIVE = 'dev'
 
 Para booking, usar otra terminal y booking.env. El código anterior no ejecuta el contenido del fichero ni modifica variables globales. Los env de API/booking contienen la ruta absoluta del catálogo en el host; el futuro Compose deberá montar ese mismo catálogo como solo lectura y sobreescribir su ruta dentro del contenedor.
 
-dev usa loopback: Kafka 19092, PostgreSQL 15432 y booking HTTP 8082; local usa nombres de contenedor kafka, postgres y booklane-booking. Las credenciales no tienen valores por defecto y la configuración/catálogo se valida antes de abrir conexiones. Se conservan los enlaces de servidor a loopback. T006 creará la infraestructura; T005 no implica que estén disponibles ni habilita aún reservas/login.
+dev usa loopback: Kafka 19092, PostgreSQL 15432 y booking HTTP 8082; local usa nombres de contenedor kafka, postgres y booklane-booking. Las credenciales no tienen valores por defecto y la configuración/catálogo se valida antes de abrir conexiones. Se conservan los enlaces de servidor a loopback. T006 prepara la infraestructura descrita arriba; su validación real sigue pendiente y no habilita aún reservas/login.

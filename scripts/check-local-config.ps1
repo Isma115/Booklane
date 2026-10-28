@@ -8,7 +8,7 @@ $source = Join-Path $testRoot 'secrets.json'
 $before = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
 $first = Get-Content -LiteralPath $source -Raw -Encoding UTF8 | ConvertFrom-Json
 $derivedBefore = @{}
-foreach ($name in @('api', 'booking', 'postgres', 'kafka', 'provisioner')) {
+foreach ($name in @('api', 'booking', 'postgres', 'kafka', 'provisioner', 'broker')) {
     $derivedBefore[$name] = (Get-FileHash -LiteralPath (Join-Path $testRoot ($name + '.env'))).Hash
 }
 & $initializer -StateDirectory $testRelative | Out-Null
@@ -20,6 +20,10 @@ foreach ($name in $derivedBefore.Keys) {
 }
 $api = Get-Content -LiteralPath (Join-Path $testRoot 'api.env') -Raw
 $booking = Get-Content -LiteralPath (Join-Path $testRoot 'booking.env') -Raw
+$broker = @(Get-Content -LiteralPath (Join-Path $testRoot 'broker.env') | Where-Object { $_ -and -not $_.StartsWith('#') })
+if ($broker.Count -ne 1 -or $broker[0] -cnotmatch '^BOOKLANE_KAFKA_BROKER_PASSWORD=[0-9a-f]{64}$') {
+    throw 'ACL bootstrap received unexpected credentials.'
+}
 if ($api -match 'BOOKLANE_DB_PASSWORD|POSTGRES_PASSWORD|PROVISIONER|BROKER|KAFKA_BOOKING_PASSWORD') { throw 'API received excessive credentials.' }
 if ($booking -match 'POSTGRES_PASSWORD|PROVISIONER|BROKER|KAFKA_API_PASSWORD') { throw 'Booking received excessive credentials.' }
 foreach ($key in $first.secrets.PSObject.Properties.Name) {

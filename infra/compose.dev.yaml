@@ -1,0 +1,18 @@
+services:
+  postgres:
+    ports:
+      - target: 5432
+        published: "15432"
+        host_ip: 127.0.0.1
+        protocol: tcp
+
+  kafka:
+    environment:
+      KAFKA_LISTENERS: CLIENT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,HOST://0.0.0.0:19092
+      KAFKA_ADVERTISED_LISTENERS: CLIENT://kafka:9092,HOST://127.0.0.1:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:SASL_PLAINTEXT,CLIENT:SASL_PLAINTEXT,HOST:SASL_PLAINTEXT
+    ports:
+      - target: 19092
+        published: "19092"
+        host_ip: 127.0.0.1
+        protocol: tcp

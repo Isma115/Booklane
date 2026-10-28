@@ -1,0 +1,129 @@
+name: booklane
+
+services:
+  postgres:
+    image: postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc
+    restart: unless-stopped
+    environment:
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=trust
+    env_file:
+      - ../.local/runtime/postgres.env
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./postgres/healthcheck.sh:/usr/local/bin/booklane-postgres-healthcheck:ro
+    healthcheck:
+      test: ["CMD", "bash", "/usr/local/bin/booklane-postgres-healthcheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    shm_size: 256mb
+    networks:
+      - backend
+
+  kafka:
+    image: apache/kafka:4.1.2@sha256:5cc2a2fd93fa2687b44015eee04fb2c3edd9e526bd64bf8bec5ff1e268772e0e
+    restart: unless-stopped
+    init: true
+    env_file:
+      - ../.local/runtime/kafka.env
+    environment:
+      CLUSTER_ID: _xdbaL7gQN2Zx9hMQ9TFFg
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_NODE_ID: "1"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: CLIENT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: CLIENT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:SASL_PLAINTEXT,CLIENT:SASL_PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: CLIENT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_SASL_ENABLED_MECHANISMS: PLAIN
+      KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: PLAIN
+      KAFKA_SASL_MECHANISM_CONTROLLER_PROTOCOL: PLAIN
+      KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer
+      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
+      KAFKA_SUPER_USERS: User:booklane-broker
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_DELETE_TOPIC_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_NUM_PARTITIONS: "3"
+      KAFKA_LOG_RETENTION_HOURS: "168"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+      - ./kafka/entrypoint.sh:/usr/local/bin/booklane-kafka-entrypoint:ro
+      - ./kafka/healthcheck.sh:/usr/local/bin/booklane-kafka-healthcheck:ro
+    entrypoint: ["/bin/bash", "/usr/local/bin/booklane-kafka-entrypoint"]
+    healthcheck:
+      test: ["CMD", "bash", "/usr/local/bin/booklane-kafka-healthcheck"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
+    stop_grace_period: 30s
+    networks:
+      - backend
+
+  kafka-acl-bootstrap:
+    image: apache/kafka:4.1.2@sha256:5cc2a2fd93fa2687b44015eee04fb2c3edd9e526bd64bf8bec5ff1e268772e0e
+    depends_on:
+      kafka:
+        condition: service_healthy
+    env_file:
+      - ../.local/runtime/broker.env
+    environment:
+      BOOKLANE_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    volumes:
+      - ./kafka/bootstrap-acls.sh:/usr/local/bin/booklane-acl-bootstrap:ro
+    entrypoint: ["/bin/bash", "/usr/local/bin/booklane-acl-bootstrap"]
+    restart: "no"
+    networks:
+      - backend
+
+  kafka-provisioner:
+    image: apache/kafka:4.1.2@sha256:5cc2a2fd93fa2687b44015eee04fb2c3edd9e526bd64bf8bec5ff1e268772e0e
+    depends_on:
+      kafka-acl-bootstrap:
+        condition: service_completed_successfully
+    env_file:
+      - ../.local/runtime/provisioner.env
+    environment:
+      BOOKLANE_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    volumes:
+      - ./kafka/provision.sh:/usr/local/bin/booklane-kafka-provision:ro
+    entrypoint: ["/bin/bash", "/usr/local/bin/booklane-kafka-provision"]
+    restart: "no"
+    networks:
+      - backend
+
+  kafka-verify:
+    image: apache/kafka:4.1.2@sha256:5cc2a2fd93fa2687b44015eee04fb2c3edd9e526bd64bf8bec5ff1e268772e0e
+    profiles: ["tools"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-provisioner:
+        condition: service_completed_successfully
+    env_file:
+      - ../.local/runtime/kafka.env
+    environment:
+      BOOKLANE_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    volumes:
+      - ./kafka/verify-kafka.sh:/usr/local/bin/booklane-kafka-verify:ro
+    entrypoint: ["/bin/bash", "/usr/local/bin/booklane-kafka-verify"]
+    restart: "no"
+    networks:
+      - backend
+
+volumes:
+  postgres-data:
+  kafka-data:
+
+networks:
+  backend:
