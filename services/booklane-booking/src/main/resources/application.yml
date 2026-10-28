@@ -3,6 +3,9 @@ spring:
     url: "${booklane.database-url}"
     username: "${booklane.database-username}"
     password: "${booklane.database-password}"
+  flyway:
+    default-schema: booking
+    schemas: booking
   application:
     name: booklane-booking
   main:

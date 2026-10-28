@@ -2,7 +2,7 @@
 
 Portfolio local de reservas automáticas de salas y equipos ficticios. Arquitectura prevista: Angular/RxJS, API Spring WebFlux, Kafka y servicio booking con Hibernate/PostgreSQL. Las lecturas usan REST interno y las notificaciones SSE.
 
-El proyecto está en preparación. Existen los tres módulos Java y la base Angular con pruebas. La configuración de infraestructura PostgreSQL/Kafka está preparada, pendiente de validación real. Las funciones de reservas siguen pendientes; todavía no hay un arranque completo de Booklane.
+El proyecto está en preparación. Existen los tres módulos Java y la base Angular con pruebas. La infraestructura PostgreSQL/Kafka y el esquema de persistencia están implementados y verificados de forma aislada. Las funciones de reservas siguen pendientes; todavía no hay un arranque completo de Booklane.
 
 ## Requisitos y versiones elegidas
 
@@ -21,7 +21,7 @@ Matriz contrastada el 27/10/2026. Los builds de base Java/Angular y contratos es
 | PostgreSQL | Imagen `postgres:18.6-bookworm` | [Imagen oficial](https://hub.docker.com/_/postgres) |
 | Kafka | Imagen `apache/kafka:4.1.2`, KRaft | [Imagen oficial](https://kafka.apache.org/41/getting-started/docker/) |
 
-Spring Framework, Spring Security, Spring Kafka, cliente Kafka, Hibernate y demás dependencias gestionadas quedan bajo el BOM de Spring Boot, sin versiones independientes. Compose fija las imágenes por etiqueta y digest; su funcionamiento queda pendiente de verificación real. El Wrapper y el lockfile Angular ya están versionados.
+Spring Framework, Spring Security, Spring Kafka, cliente Kafka, Hibernate y demás dependencias gestionadas quedan bajo el BOM de Spring Boot, sin versiones independientes. Compose fija las imágenes por etiqueta y digest; su funcionamiento se ha comprobado con infraestructura real. El Wrapper y el lockfile Angular ya están versionados.
 
 ## Preparar Windows
 
@@ -64,7 +64,7 @@ El último comando debe indicar `linux`; disponer del cliente Docker no basta. P
 
 ## Infraestructura local
 
-Configuración preparada en T006, sin pruebas reales ejecutadas en esta continuación por el modo rápido del proyecto. Desde la raíz y con JDK 21/Docker Linux seleccionados:
+Infraestructura de T006 verificada con PostgreSQL y Kafka reales. Desde la raíz y con JDK 21/Docker Linux seleccionados:
 
 ```powershell
 .\scripts\init-local.ps1
@@ -84,7 +84,7 @@ El overlay dev publica exclusivamente 127.0.0.1:15432 (PostgreSQL) y 127.0.0.1:1
 
 Para parar conservando datos, usar stop con los mismos archivos Compose. No usar down -v sobre datos que se quieran conservar ni borrar los secretos para corregir autenticación. init-local conserva los secretos existentes y genera también broker.env, exclusivo del bootstrap.
 
-La verificación real preparada se ejecuta con `.\scripts\verify-infra.ps1`: utiliza un proyecto aislado, comprueba transporte y reinicio, y elimina sus propios volúmenes al terminar. Requiere los puertos dev libres. No se ha ejecutado en esta continuación y no demuestra todavía un recorrido de reservas.
+La verificación real preparada se ejecuta con `.\scripts\verify-infra.ps1`: utiliza un proyecto aislado, comprueba transporte y reinicio, y elimina sus propios volúmenes al terminar. Requiere los puertos dev libres. La suite pasó el 28/10/2026; no demuestra todavía un recorrido de reservas. Un cliente Kafka real comprobó por separado la publicación desde Windows y el rechazo sin SASL.
 
 ## Compilar y comprobar Java
 
@@ -96,9 +96,9 @@ Desde la raíz, después de seleccionar el JDK 21:
 
 En Linux/macOS con JDK 21: `./mvnw -B -ntp verify`. El Wrapper descarga Maven 3.9.16 y valida su SHA-256. Requiere acceso a Maven Central la primera vez.
 
-El agregador construye `contracts-java`, `booklane-api` (WebFlux/Netty) y `booklane-booking` (MVC/Hibernate). Surefire ejecuta `*Test`; Failsafe reserva `*IT` para las pruebas de integración futuras. Actualmente hay 30 pruebas Java: diez de protocolo/huella, dieciséis de configuración/catálogos y cuatro de contexto/arquitectura, sin pruebas de persistencia o Kafka. contracts-java contiene records wire, normalización SHA-256 y serialización explícita.
+El agregador construye `contracts-java`, `booklane-api` (WebFlux/Netty) y `booklane-booking` (MVC/Hibernate). Surefire ejecuta `*Test`; Failsafe ejecuta `*IT`. Hay 30 pruebas Java de protocolo, configuración, contexto y arquitectura, más una prueba de integración de persistencia con PostgreSQL real mediante Testcontainers. La infraestructura Kafka se verifica con el script independiente. contracts-java contiene records wire, normalización SHA-256 y serialización explícita.
 
-Las pruebas arrancan servidores locales en puertos aleatorios y con perfil `test`. Solo en los recursos de test de booking se excluye DataSource: no se usa H2 y no se simula una conexión satisfactoria a PostgreSQL. Fuera de las pruebas, booking requiere su futura configuración PostgreSQL. No hay endpoints de negocio ni autenticación definitiva.
+Las pruebas de contexto arrancan servidores locales con perfil `test`; la prueba de persistencia arranca PostgreSQL aislado mediante Testcontainers y exige Docker Linux. Flyway migra el esquema y Hibernate lo valida al iniciar. No se usa H2. No hay endpoints de negocio ni autenticación definitiva.
 
 Para comprobar que Enforcer rechaza MVC/JDBC/JPA en api, dependencias cruzadas entre aplicaciones y Spring en contracts-java:
 
@@ -185,4 +185,4 @@ $env:SPRING_PROFILES_ACTIVE = 'dev'
 
 Para booking, usar otra terminal y booking.env. El código anterior no ejecuta el contenido del fichero ni modifica variables globales. Los env de API/booking contienen la ruta absoluta del catálogo en el host; el futuro Compose deberá montar ese mismo catálogo como solo lectura y sobreescribir su ruta dentro del contenedor.
 
-dev usa loopback: Kafka 19092, PostgreSQL 15432 y booking HTTP 8082; local usa nombres de contenedor kafka, postgres y booklane-booking. Las credenciales no tienen valores por defecto y la configuración/catálogo se valida antes de abrir conexiones. Se conservan los enlaces de servidor a loopback. T006 prepara la infraestructura descrita arriba; su validación real sigue pendiente y no habilita aún reservas/login.
+dev usa loopback: Kafka 19092, PostgreSQL 15432 y booking HTTP 8082; local usa nombres de contenedor kafka, postgres y booklane-booking. Las credenciales no tienen valores por defecto y la configuración/catálogo se valida antes de abrir conexiones. Se conservan los enlaces de servidor a loopback. T006 proporciona la infraestructura descrita arriba; todavía no habilita reservas ni login.
