@@ -138,12 +138,21 @@ public class CommandResultDao implements ReservationStore {
         return version.longValue();
     }
 
+    @Override
+    public long setResourceActive(UUID resourceId, boolean active) {
+        Number version = (Number) entityManager.createNativeQuery("""
+                UPDATE booking.resources SET active = :active, version = version + 1
+                WHERE id = :id AND version < 9007199254740991 RETURNING version
+                """).setParameter("active", active).setParameter("id", resourceId).getSingleResult();
+        return version.longValue();
+    }
+
     private boolean insertAudit(CommandRequest request, String action, String outcome, String reason, UUID booking, Instant at) {
         return entityManager.createNativeQuery("""
                 INSERT INTO booking.audit_entries (id, actor_id, command_id, request_hash, action,
                     resource_id, booking_id, outcome, reason, occurred_at)
                 VALUES (:id, :actor, :command, :hash, :action, :resource, :booking, :outcome,
-                    CASE WHEN :action = 'CancelBooking' THEN COALESCE(CAST(:canonical AS jsonb)->'payload'->>'reason', :reason)
+                    CASE WHEN :action IN ('CancelBooking', 'SetResourceStatus') THEN COALESCE(CAST(:canonical AS jsonb)->'payload'->>'reason', :reason)
                          ELSE :reason END, :at)
                 ON CONFLICT (actor_id, command_id, request_hash, action) DO NOTHING
                 """).setParameter("id", UUID.randomUUID()).setParameter("actor", request.actorId())

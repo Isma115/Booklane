@@ -18,11 +18,13 @@ import com.booklane.booking.application.CommandRequest;
 import com.booklane.booking.application.ProcessingResult;
 import com.booklane.booking.application.CreateBookingHandler;
 import com.booklane.booking.application.CancelBookingHandler;
+import com.booklane.booking.application.SetResourceStatusHandler;
 import com.booklane.booking.domain.Actor;
 import com.booklane.contracts.RequestFingerprint;
 import com.booklane.contracts.command.CommandType;
 import com.booklane.contracts.command.CreateBookingPayload;
 import com.booklane.contracts.command.CancelBookingPayload;
+import com.booklane.contracts.command.SetResourceStatusPayload;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -54,6 +56,8 @@ class PersistenceIT {
                 execute(admin, "CREATE ROLE booklane_booking LOGIN PASSWORD '" + PASSWORD + "'");
                 execute(admin, "CREATE SCHEMA booking AUTHORIZATION booklane_booking");
             }
+            long savedBookings;
+            long savedResults;
             try (var app = start(postgres); var db = connect(postgres)) {
                 assertThat(number(db, "SELECT count(*) FROM booking.resources")).isEqualTo(5);
                 assertThat(number(db, "SELECT count(*) FROM booking.resources WHERE name = 'Sala Nébula'")).isEqualTo(1);
@@ -74,14 +78,73 @@ class PersistenceIT {
                 verifyClaims(app.getBean(CommandProcessor.class), db);
                 verifyCreation(app.getBean(CreateBookingHandler.class), db);
                 verifyCancellation(app.getBean(CancelBookingHandler.class), db);
+                verifyStatus(app.getBean(SetResourceStatusHandler.class), app.getBean(CreateBookingHandler.class), db);
+                savedBookings = number(db, "SELECT count(*) FROM booking.bookings");
+                savedResults = number(db, "SELECT count(*) FROM booking.command_results");
             }
             try (var app = start(postgres); var db = connect(postgres)) {
                 assertThat(number(db, "SELECT count(*) FROM booking.resources")).isEqualTo(5);
-                assertThat(number(db, "SELECT count(*) FROM booking.bookings")).isEqualTo(7);
-                assertThat(number(db, "SELECT count(*) FROM booking.command_results")).isEqualTo(15);
+                assertThat(number(db, "SELECT count(*) FROM booking.bookings")).isEqualTo(savedBookings);
+                assertThat(number(db, "SELECT count(*) FROM booking.command_results")).isEqualTo(savedResults);
                 assertThat(number(db, "SELECT count(*) FROM booking.flyway_schema_history WHERE success")).isEqualTo(4);
             }
         }
+    }
+
+    private static void verifyStatus(SetResourceStatusHandler handler, CreateBookingHandler creation, Connection db) throws Exception {
+        var alicia = new Actor(UUID.fromString(OWNER), Actor.Role.USER);
+        var admin = new Actor(UUID.fromString("20000000-0000-4000-8000-000000000003"), Actor.Role.ADMIN);
+        UUID resource = UUID.fromString("10000000-0000-4000-8000-000000000003");
+        var denied = statusRequest(alicia, resource, true, "Mantenimiento", 0);
+        assertThat(handler.setStatus(denied, alicia, true, "Mantenimiento", 0).outcome().reasonCode()).isEqualTo("FORBIDDEN");
+        var badReason = statusRequest(admin, resource, true, "x", 0);
+        assertThat(handler.setStatus(badReason, admin, true, "x", 0).outcome().reasonCode()).isEqualTo("INVALID_REASON");
+        var enable = statusRequest(admin, resource, true, "Reapertura", 0);
+        assertThat(handler.setStatus(enable, admin, true, "Reapertura", 0).outcome().resourceVersion()).isEqualTo(1);
+        assertThat(number(db, "SELECT count(*) FROM booking.audit_entries WHERE command_id = '" + enable.commandId() + "' AND reason = 'Reapertura'")).isEqualTo(1);
+        var stale = statusRequest(admin, resource, false, "Mantenimiento", 0);
+        assertThat(handler.setStatus(stale, admin, false, "Mantenimiento", 0).outcome().reasonCode()).isEqualTo("VERSION_CONFLICT");
+        var unchanged = statusRequest(admin, resource, true, "Reapertura", 1);
+        assertThat(handler.setStatus(unchanged, admin, true, "Reapertura", 1).outcome().reasonCode()).isEqualTo("NO_CHANGE");
+        assertThat(number(db, "SELECT version FROM booking.resources WHERE id = '" + resource + "'")).isEqualTo(1);
+        assertThat(number(db, "SELECT count(*) FROM booking.outbox_events WHERE aggregate_id = '" + resource + "' AND event_type = 'ResourceAvailabilityChanged'")).isEqualTo(1);
+
+        UUID raceResource = UUID.fromString("10000000-0000-4000-8000-000000000004");
+        Instant start = Instant.parse("2027-01-02T09:00:00Z");
+        Instant end = start.plusSeconds(3600);
+        var existing = createRequest(alicia, raceResource, start, end);
+        assertThat(creation.create(existing, alicia, "Reunión", start, end).outcome().resourceVersion()).isEqualTo(1);
+        var reserve = createRequest(alicia, raceResource, end, end.plusSeconds(3600));
+        var disable = statusRequest(admin, raceResource, false, "Mantenimiento", 1);
+        var gate = new CountDownLatch(1);
+        ProcessingResult reservation;
+        ProcessingResult status;
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var a = executor.submit(() -> { gate.await(); return creation.create(reserve, alicia, "Reunión", end, end.plusSeconds(3600)); });
+            var b = executor.submit(() -> { gate.await(); return handler.setStatus(disable, admin, false, "Mantenimiento", 1); });
+            gate.countDown();
+            reservation = a.get(15, TimeUnit.SECONDS);
+            status = b.get(15, TimeUnit.SECONDS);
+        }
+        if (status.outcome().status() == CommandOutcome.Status.SUCCEEDED) {
+            assertThat(reservation.outcome().reasonCode()).isEqualTo("RESOURCE_INACTIVE");
+            assertThat(number(db, "SELECT version FROM booking.resources WHERE id = '" + raceResource + "'")).isEqualTo(2);
+            assertThat(number(db, "SELECT count(*) FROM booking.bookings WHERE resource_id = '" + raceResource + "'")).isEqualTo(1);
+        } else {
+            assertThat(status.outcome().reasonCode()).isEqualTo("VERSION_CONFLICT");
+            assertThat(reservation.outcome().status()).isEqualTo(CommandOutcome.Status.SUCCEEDED);
+            var retry = statusRequest(admin, raceResource, false, "Mantenimiento", 2);
+            assertThat(handler.setStatus(retry, admin, false, "Mantenimiento", 2).outcome().resourceVersion()).isEqualTo(3);
+            assertThat(number(db, "SELECT count(*) FROM booking.bookings WHERE resource_id = '" + raceResource + "'")).isEqualTo(2);
+        }
+        assertThat(number(db, "SELECT count(*) FROM booking.resources WHERE id = '" + raceResource + "' AND NOT active")).isEqualTo(1);
+        assertThat(number(db, "SELECT count(*) FROM booking.bookings WHERE id = '" + creation.create(existing, alicia, "Reunión", start, end).outcome().bookingId() + "' AND status = 'CONFIRMED'")).isEqualTo(1);
+    }
+
+    private static CommandRequest statusRequest(Actor actor, UUID resource, boolean active, String reason, long version) {
+        var payload = new SetResourceStatusPayload(active, reason, version);
+        return new CommandRequest(actor.id(), UUID.randomUUID(), RequestFingerprint.calculate(CommandType.SetResourceStatus, resource, payload),
+                "SetResourceStatus", resource, RequestFingerprint.canonicalJson(CommandType.SetResourceStatus, resource, payload), UUID.randomUUID());
     }
 
     private static void verifyCancellation(CancelBookingHandler handler, Connection db) throws Exception {
