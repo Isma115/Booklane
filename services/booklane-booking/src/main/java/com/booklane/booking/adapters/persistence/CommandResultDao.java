@@ -150,10 +150,10 @@ public class CommandResultDao implements ReservationStore {
     private boolean insertAudit(CommandRequest request, String action, String outcome, String reason, UUID booking, Instant at) {
         return entityManager.createNativeQuery("""
                 INSERT INTO booking.audit_entries (id, actor_id, command_id, request_hash, action,
-                    resource_id, booking_id, outcome, reason, occurred_at)
-                VALUES (:id, :actor, :command, :hash, :action, :resource, :booking, :outcome,
-                    CASE WHEN :action IN ('CancelBooking', 'SetResourceStatus') THEN COALESCE(CAST(:canonical AS jsonb)->'payload'->>'reason', :reason)
-                         ELSE :reason END, :at)
+                    resource_id, booking_id, outcome, reason_code, reason, occurred_at)
+                VALUES (:id, :actor, :command, :hash, :action, :resource, :booking, :outcome, :reason,
+                    CASE WHEN :action IN ('CancelBooking', 'SetResourceStatus') THEN CAST(:canonical AS jsonb)->'payload'->>'reason'
+                         ELSE NULL END, :at)
                 ON CONFLICT (actor_id, command_id, request_hash, action) DO NOTHING
                 """).setParameter("id", UUID.randomUUID()).setParameter("actor", request.actorId())
                 .setParameter("command", request.commandId()).setParameter("hash", request.requestHash())

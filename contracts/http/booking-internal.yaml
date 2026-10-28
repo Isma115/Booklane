@@ -574,7 +574,8 @@
               "enum": [
                 "CreateBooking",
                 "CancelBooking",
-                "SetResourceStatus"
+                "SetResourceStatus",
+                "IDEMPOTENCY_CONFLICT"
               ]
             }
           },

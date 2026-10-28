@@ -20,7 +20,11 @@ import com.booklane.booking.application.CreateBookingHandler;
 import com.booklane.booking.application.CancelBookingHandler;
 import com.booklane.booking.application.SetResourceStatusHandler;
 import com.booklane.booking.domain.Actor;
+import com.booklane.booking.query.BookingReadService;
+import com.booklane.booking.query.ReadModels;
+import com.booklane.booking.query.ReadStore;
 import com.booklane.contracts.RequestFingerprint;
+import com.booklane.contracts.WireJson;
 import com.booklane.contracts.command.CommandType;
 import com.booklane.contracts.command.CreateBookingPayload;
 import com.booklane.contracts.command.CancelBookingPayload;
@@ -32,6 +36,10 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+import java.time.LocalDate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -79,6 +87,7 @@ class PersistenceIT {
                 verifyCreation(app.getBean(CreateBookingHandler.class), db);
                 verifyCancellation(app.getBean(CancelBookingHandler.class), db);
                 verifyStatus(app.getBean(SetResourceStatusHandler.class), app.getBean(CreateBookingHandler.class), db);
+                verifyReads(app, db);
                 savedBookings = number(db, "SELECT count(*) FROM booking.bookings");
                 savedResults = number(db, "SELECT count(*) FROM booking.command_results");
             }
@@ -86,9 +95,100 @@ class PersistenceIT {
                 assertThat(number(db, "SELECT count(*) FROM booking.resources")).isEqualTo(5);
                 assertThat(number(db, "SELECT count(*) FROM booking.bookings")).isEqualTo(savedBookings);
                 assertThat(number(db, "SELECT count(*) FROM booking.command_results")).isEqualTo(savedResults);
-                assertThat(number(db, "SELECT count(*) FROM booking.flyway_schema_history WHERE success")).isEqualTo(4);
+                assertThat(number(db, "SELECT count(*) FROM booking.flyway_schema_history WHERE success")).isEqualTo(5);
             }
         }
+    }
+
+    private static void verifyReads(ConfigurableApplicationContext app, Connection db) throws Exception {
+        var reads = app.getBean(BookingReadService.class);
+        var alicia = new Actor(UUID.fromString(OWNER), Actor.Role.USER);
+        var bruno = new Actor(UUID.fromString("20000000-0000-4000-8000-000000000002"), Actor.Role.USER);
+        var admin = new Actor(UUID.fromString("20000000-0000-4000-8000-000000000003"), Actor.Role.ADMIN);
+        UUID resource = UUID.fromString("10000000-0000-4000-8000-000000000002");
+        var firstPage = reads.resources(alicia, null, null, 0, 2, "name,asc");
+        var secondPage = reads.resources(alicia, null, null, 1, 2, "name,asc");
+        assertThat(firstPage.totalElements()).isEqualTo(5);
+        assertThat(firstPage.items()).hasSize(2);
+        assertThat(secondPage.items()).hasSize(2);
+        assertThat(firstPage.items()).doesNotContainAnyElementsOf(secondPage.items());
+        assertThat(reads.resources(alicia, "ROOM", "Nébula", 0, 20, "name,asc").items()).hasSize(1);
+        assertThat(reads.resources(alicia, null, "%", 0, 20, "name,asc").items()).isEmpty();
+        assertThatThrownBy(() -> reads.resources(alicia, null, null, 0, 101, "name,asc")).isInstanceOf(IllegalArgumentException.class);
+
+        var availability = reads.availability(bruno, resource, LocalDate.parse("2027-01-02"), LocalDate.parse("2027-01-03")).orElseThrow();
+        assertThat(availability.resourceVersion()).isEqualTo(5);
+        assertThat(availability.occupied()).hasSize(1);
+        assertThat(ReadModels.OccupiedInterval.class.getRecordComponents()).hasSize(2);
+        assertThat(availability.days().getFirst().anchors()).hasSize(57);
+        assertThat(reads.availability(alicia, resource, LocalDate.parse("2027-03-28"), LocalDate.parse("2027-03-29"))
+                .orElseThrow().days().getFirst().opensAt()).isEqualTo(Instant.parse("2027-03-28T06:00:00Z"));
+        assertThat(reads.availability(alicia, resource, LocalDate.parse("2027-10-31"), LocalDate.parse("2027-11-01"))
+                .orElseThrow().days().getFirst().opensAt()).isEqualTo(Instant.parse("2027-10-31T07:00:00Z"));
+        assertThatThrownBy(() -> reads.availability(alicia, resource, LocalDate.parse("2027-01-01"), LocalDate.parse("2027-02-02")))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        UUID own = uuid(db, "SELECT id FROM booking.bookings WHERE resource_id = '" + resource + "' AND starts_at = '2027-01-02T10:00:00Z'");
+        assertThat(reads.booking(alicia, own)).isPresent();
+        assertThat(reads.booking(bruno, own)).isEmpty();
+        assertThat(reads.booking(admin, own)).isPresent();
+        assertThat(reads.mine(alicia, null, "ALL", 0, 100, "startsAt,asc").items())
+                .allMatch(booking -> booking.ownerId().equals(alicia.id()));
+        UUID command = uuid(db, "SELECT command_id FROM booking.command_results WHERE actor_id = '" + alicia.id() + "' AND command_type = 'CreateBooking' ORDER BY command_id LIMIT 1");
+        var found = reads.operation(alicia, command, null);
+        assertThat(found.state()).isEqualTo(ReadModels.OperationState.FOUND);
+        assertThat(found.result().canonicalRequest()).isNotNull();
+        var encoded = WireJson.read(WireJson.write(found.result()), tools.jackson.databind.JsonNode.class);
+        assertThat(encoded.get("canonicalRequest").isObject()).isTrue();
+        assertThat(encoded.has("alreadyCancelled")).isFalse();
+        assertThat(reads.operation(alicia, command, "f".repeat(64)).state()).isEqualTo(ReadModels.OperationState.IDEMPOTENCY_CONFLICT);
+        assertThat(reads.operation(admin, command, null).state()).isEqualTo(ReadModels.OperationState.NOT_OBSERVED);
+        var filter = new ReadModels.AuditFilter(null, null, null, null, null, null);
+        assertThatThrownBy(() -> reads.audit(alicia, filter, 0, 2, "occurredAt,asc")).isInstanceOf(SecurityException.class);
+        var audit1 = reads.audit(admin, filter, 0, 2, "occurredAt,asc");
+        var audit2 = reads.audit(admin, filter, 1, 2, "occurredAt,asc");
+        assertThat(audit1.items()).hasSize(2).doesNotContainAnyElementsOf(audit2.items());
+        var conflicts = reads.audit(admin, new ReadModels.AuditFilter(null, null, "IDEMPOTENCY_CONFLICT", null, null, null),
+                0, 100, "occurredAt,desc");
+        assertThat(conflicts.items()).anyMatch(entry -> entry.reasonCode().equals("IDEMPOTENCY_CONFLICT"));
+
+        verifySnapshot(app, db, reads, alicia);
+    }
+
+    private static void verifySnapshot(ConfigurableApplicationContext app, Connection db, BookingReadService reads, Actor actor) throws Exception {
+        UUID resource = UUID.fromString("10000000-0000-4000-8000-000000000003");
+        var store = app.getBean(ReadStore.class);
+        var transaction = new TransactionTemplate(app.getBean(PlatformTransactionManager.class));
+        transaction.setReadOnly(true);
+        transaction.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        var started = new CountDownLatch(1);
+        var committed = new CountDownLatch(1);
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            var old = executor.submit(() -> transaction.execute(status -> {
+                var state = store.resource(resource).orElseThrow();
+                started.countDown();
+                try {
+                    if (!committed.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("snapshot timed out");
+                } catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException(e); }
+                var occupied = store.occupied(resource, Instant.parse("2027-01-03T00:00:00Z"), Instant.parse("2027-01-04T00:00:00Z"));
+                return new Object[] { state.resourceVersion(), occupied.size() };
+            }));
+            try {
+                assertThat(started.await(10, TimeUnit.SECONDS)).isTrue();
+                db.setAutoCommit(false);
+                try {
+                    execute(db, booking(UUID.randomUUID().toString(), resource.toString(), "2027-01-03T09:00:00Z", "2027-01-03T10:00:00Z"));
+                    execute(db, "UPDATE booking.resources SET version = version + 1 WHERE id = '" + resource + "'");
+                    db.commit();
+                } finally { db.setAutoCommit(true); }
+            } finally { committed.countDown(); }
+            Object[] snapshot = old.get(10, TimeUnit.SECONDS);
+            assertThat(snapshot[0]).isEqualTo(1L);
+            assertThat(snapshot[1]).isEqualTo(0);
+        }
+        var fresh = reads.availability(actor, resource, LocalDate.parse("2027-01-03"), LocalDate.parse("2027-01-04")).orElseThrow();
+        assertThat(fresh.resourceVersion()).isEqualTo(2);
+        assertThat(fresh.occupied()).hasSize(1);
     }
 
     private static void verifyStatus(SetResourceStatusHandler handler, CreateBookingHandler creation, Connection db) throws Exception {

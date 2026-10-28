@@ -26,6 +26,8 @@ public class AuditEntryEntity {
     private UUID bookingId;
     @Column(nullable = false, length = 20)
     private String outcome;
+    @Column(name = "reason_code", nullable = false, length = 64)
+    private String reasonCode;
     @Column(length = 500)
     private String reason;
     @Column(name = "occurred_at", nullable = false)

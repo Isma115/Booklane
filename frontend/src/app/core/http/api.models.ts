@@ -29,7 +29,7 @@ export type Availability = { "resourceId": string; "active": boolean; "resourceV
 
 export type Booking = { "id": string; "resourceId": string; "ownerId": string; "title": string; "startsAt": string; "endsAt": string; "status": "CONFIRMED" | "CANCELLED"; "createdAt": string; "cancelledAt": string | null; "version": number };
 
-export type AuditEntry = { "id": string; "actorId": string; "commandId": string; "requestHash": string; "action": "CreateBooking" | "CancelBooking" | "SetResourceStatus"; "resourceId": string; "bookingId": string | null; "outcome": "SUCCEEDED" | "REJECTED"; "reasonCode": string; "reason": string | null; "occurredAt": string };
+export type AuditEntry = { "id": string; "actorId": string; "commandId": string; "requestHash": string; "action": "CreateBooking" | "CancelBooking" | "SetResourceStatus" | "IDEMPOTENCY_CONFLICT"; "resourceId": string; "bookingId": string | null; "outcome": "SUCCEEDED" | "REJECTED"; "reasonCode": string; "reason": string | null; "occurredAt": string };
 
 export type ConsumerStatus = { "state": "RUNNING" | "PAUSED" | "UNKNOWN"; "observedAt": string };
 

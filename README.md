@@ -96,7 +96,7 @@ Desde la raíz, después de seleccionar el JDK 21:
 
 En Linux/macOS con JDK 21: `./mvnw -B -ntp verify`. El Wrapper descarga Maven 3.9.16 y valida su SHA-256. Requiere acceso a Maven Central la primera vez.
 
-El agregador construye `contracts-java`, `booklane-api` (WebFlux/Netty) y `booklane-booking` (MVC/Hibernate). Surefire ejecuta `*Test`; Failsafe ejecuta `*IT`. Hay 57 pruebas Java de protocolo, configuración, contexto, arquitectura y reglas de dominio, más una prueba de integración de persistencia con PostgreSQL real mediante Testcontainers. La infraestructura Kafka se verifica con el script independiente. contracts-java contiene records wire, normalización SHA-256 y serialización explícita.
+El agregador construye `contracts-java`, `booklane-api` (WebFlux/Netty) y `booklane-booking` (MVC/Hibernate). Surefire ejecuta `*Test`; Failsafe ejecuta `*IT`. Hay 57 pruebas Java de protocolo, configuración, contexto, arquitectura y reglas de dominio, más dos pruebas de integración con PostgreSQL real mediante Testcontainers. La infraestructura Kafka se verifica con el script independiente. contracts-java contiene records wire, normalización SHA-256 y serialización explícita.
 
 Las pruebas de contexto arrancan servidores locales con perfil `test`; la prueba de persistencia arranca PostgreSQL aislado mediante Testcontainers y exige Docker Linux. Flyway migra el esquema y Hibernate lo valida al iniciar. No se usa H2. No hay endpoints de negocio ni autenticación definitiva.
 

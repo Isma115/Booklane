@@ -6,6 +6,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import com.booklane.booking.application.port.ReservationStore;
+import com.booklane.booking.query.ReadStore;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,6 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BookingContextTest {
     @MockitoBean
     ReservationStore reservationStore;
+    @MockitoBean
+    ReadStore readStore;
 
     @Autowired
     ApplicationContext context;
