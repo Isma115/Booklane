@@ -108,6 +108,11 @@ def main():
         for example in schema.get("examples", []):
             public_validator(name).validate(example)
             example_count += 1
+    actual_http = ROOT / "services/booklane-booking/target/serialized-http-internal"
+    for name in ("ResourcePage", "Availability", "BookingPage", "Booking", "OperationResult", "AuditEntryPage", "ApiError"):
+        path = actual_http / f"{name}.json"
+        assert path.exists(), f"Run the internal HTTP integration test first: {path}"
+        public_validator(name).validate(read(path))
     for case in read(ROOT / "contracts/http/examples/invalid.json"):
         if "schema" in case:
             validator = public_validator(case["schema"])

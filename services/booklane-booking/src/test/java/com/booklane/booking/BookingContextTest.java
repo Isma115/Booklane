@@ -39,7 +39,7 @@ class BookingContextTest {
             var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:"
                     + server.getWebServer().getPort() + "/internal/bookings"))
                     .timeout(Duration.ofSeconds(5)).GET().build();
-            assertThat(client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(404);
+            assertThat(client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(401);
         }
     }
 }
