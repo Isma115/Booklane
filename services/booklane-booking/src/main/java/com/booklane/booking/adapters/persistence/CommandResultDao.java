@@ -6,9 +6,11 @@ import com.booklane.booking.application.port.ReservationStore;
 import com.booklane.contracts.WireJson;
 import com.booklane.contracts.event.CommandCompletedEvent;
 import com.booklane.contracts.event.Outcome;
+import com.booklane.contracts.event.ResourceAvailabilityChangedEvent;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Repository;
 
@@ -62,6 +64,52 @@ public class CommandResultDao implements ReservationStore {
         if (insertAudit(request, "IDEMPOTENCY_CONFLICT", "REJECTED", "IDEMPOTENCY_CONFLICT", null, occurredAt)) {
             insertEvent(request, CommandOutcome.Status.REJECTED, "IDEMPOTENCY_CONFLICT", null, null, occurredAt);
         }
+    }
+
+    @Override
+    public Optional<ResourceState> lockResource(UUID resourceId) {
+        var rows = entityManager.createNativeQuery("SELECT active, version FROM booking.resources WHERE id = :id FOR UPDATE")
+                .setParameter("id", resourceId).getResultList();
+        if (rows.isEmpty()) return Optional.empty();
+        Object[] row = (Object[]) rows.getFirst();
+        return Optional.of(new ResourceState((Boolean) row[0], ((Number) row[1]).longValue()));
+    }
+
+    @Override
+    public boolean overlaps(UUID resourceId, Instant startsAt, Instant endsAt) {
+        Number count = (Number) entityManager.createNativeQuery("""
+                SELECT count(*) FROM booking.bookings WHERE resource_id = :resource AND status = 'CONFIRMED'
+                AND starts_at < :ends AND ends_at > :starts
+                """).setParameter("resource", resourceId).setParameter("starts", startsAt)
+                .setParameter("ends", endsAt).getSingleResult();
+        return count.longValue() != 0;
+    }
+
+    @Override
+    public long createBooking(UUID bookingId, UUID resourceId, UUID ownerId, String title,
+            Instant startsAt, Instant endsAt, Instant createdAt) {
+        entityManager.createNativeQuery("""
+                INSERT INTO booking.bookings (id, resource_id, owner_id, title, starts_at, ends_at, status, created_at)
+                VALUES (:id, :resource, :owner, :title, :starts, :ends, 'CONFIRMED', :created)
+                """).setParameter("id", bookingId).setParameter("resource", resourceId).setParameter("owner", ownerId)
+                .setParameter("title", title).setParameter("starts", startsAt).setParameter("ends", endsAt)
+                .setParameter("created", createdAt).executeUpdate();
+        Number version = (Number) entityManager.createNativeQuery("""
+                UPDATE booking.resources SET version = version + 1 WHERE id = :id AND version < 9007199254740991
+                RETURNING version
+                """).setParameter("id", resourceId).getSingleResult();
+        return version.longValue();
+    }
+
+    @Override
+    public void recordAvailabilityChange(UUID resourceId, long version, Instant occurredAt) {
+        UUID eventId = UUID.randomUUID();
+        var event = new ResourceAvailabilityChangedEvent(1, "ResourceAvailabilityChanged", eventId, resourceId, version, occurredAt);
+        entityManager.createNativeQuery("""
+                INSERT INTO booking.outbox_events (id, aggregate_id, event_type, payload, created_at)
+                VALUES (:id, :aggregate, 'ResourceAvailabilityChanged', CAST(:payload AS jsonb), :created)
+                """).setParameter("id", eventId).setParameter("aggregate", resourceId)
+                .setParameter("payload", WireJson.write(event)).setParameter("created", occurredAt).executeUpdate();
     }
 
     private boolean insertAudit(CommandRequest request, String action, String outcome, String reason, UUID booking, Instant at) {

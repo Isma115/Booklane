@@ -4,6 +4,8 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -14,10 +16,18 @@ import com.booklane.booking.application.CommandOutcome;
 import com.booklane.booking.application.CommandProcessor;
 import com.booklane.booking.application.CommandRequest;
 import com.booklane.booking.application.ProcessingResult;
+import com.booklane.booking.application.CreateBookingHandler;
+import com.booklane.booking.domain.Actor;
+import com.booklane.contracts.RequestFingerprint;
+import com.booklane.contracts.command.CommandType;
+import com.booklane.contracts.command.CreateBookingPayload;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -60,14 +70,104 @@ class PersistenceIT {
                     assertThat(query.getObject(1, java.time.OffsetDateTime.class).toInstant()).isEqualTo(Instant.parse("2027-01-01T09:00:00Z"));
                 }
                 verifyClaims(app.getBean(CommandProcessor.class), db);
+                verifyCreation(app.getBean(CreateBookingHandler.class), db);
             }
             try (var app = start(postgres); var db = connect(postgres)) {
                 assertThat(number(db, "SELECT count(*) FROM booking.resources")).isEqualTo(5);
-                assertThat(number(db, "SELECT count(*) FROM booking.bookings")).isEqualTo(3);
-                assertThat(number(db, "SELECT count(*) FROM booking.command_results")).isEqualTo(2);
+                assertThat(number(db, "SELECT count(*) FROM booking.bookings")).isEqualTo(6);
+                assertThat(number(db, "SELECT count(*) FROM booking.command_results")).isEqualTo(8);
                 assertThat(number(db, "SELECT count(*) FROM booking.flyway_schema_history WHERE success")).isEqualTo(4);
             }
         }
+    }
+
+    private static void verifyCreation(CreateBookingHandler handler, Connection db) throws Exception {
+        UUID resource = UUID.fromString("10000000-0000-4000-8000-000000000002");
+        var alicia = new Actor(UUID.fromString(OWNER), Actor.Role.USER);
+        var bruno = new Actor(UUID.fromString("20000000-0000-4000-8000-000000000002"), Actor.Role.USER);
+        Instant start = Instant.parse("2027-01-02T09:00:00Z");
+        Instant end = Instant.parse("2027-01-02T10:00:00Z");
+        var first = createRequest(alicia, resource, start, end);
+        var second = createRequest(bruno, resource, start, end);
+        var gate = new CountDownLatch(1);
+        ProcessingResult one;
+        ProcessingResult two;
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var a = executor.submit(() -> { gate.await(); return handler.create(first, alicia, "Reunión", start, end); });
+            var b = executor.submit(() -> { gate.await(); return handler.create(second, bruno, "Reunión", start, end); });
+            gate.countDown();
+            one = a.get(15, TimeUnit.SECONDS);
+            two = b.get(15, TimeUnit.SECONDS);
+        }
+        assertThat(java.util.List.of(one.outcome().status(), two.outcome().status()))
+                .containsExactlyInAnyOrder(CommandOutcome.Status.SUCCEEDED, CommandOutcome.Status.REJECTED);
+        var winner = one.outcome().status() == CommandOutcome.Status.SUCCEEDED ? one : two;
+        var winnerRequest = one.outcome().status() == CommandOutcome.Status.SUCCEEDED ? first : second;
+        var winnerActor = one.outcome().status() == CommandOutcome.Status.SUCCEEDED ? alicia : bruno;
+        var loser = one.outcome().status() == CommandOutcome.Status.REJECTED ? one : two;
+        assertThat(loser.outcome().reasonCode()).isEqualTo("OVERLAP");
+        assertThat(winner.outcome().resourceVersion()).isEqualTo(1);
+        assertThat(number(db, "SELECT count(*) FROM booking.bookings WHERE resource_id = '" + resource + "'")).isEqualTo(1);
+        assertThat(number(db, "SELECT version FROM booking.resources WHERE id = '" + resource + "'")).isEqualTo(1);
+        assertThat(number(db, "SELECT count(*) FROM booking.outbox_events WHERE aggregate_id = '" + resource
+                + "' AND payload->>'resourceVersion' = '1' AND event_type IN ('CommandCompleted','ResourceAvailabilityChanged')")).isEqualTo(3);
+        var replay = handler.create(winnerRequest, winnerActor, "invalid", Instant.EPOCH, Instant.EPOCH);
+        assertThat(replay.state()).isEqualTo(ProcessingResult.State.REPLAYED);
+        assertThat(replay.outcome()).isEqualTo(winner.outcome());
+
+        var adjacent = createRequest(alicia, resource, end, end.plusSeconds(3600));
+        assertThat(handler.create(adjacent, alicia, "Reunión", end, end.plusSeconds(3600)).outcome().resourceVersion()).isEqualTo(2);
+        UUID inactive = UUID.fromString("10000000-0000-4000-8000-000000000003");
+        execute(db, "UPDATE booking.resources SET active = false WHERE id = '" + inactive + "'");
+        var disabled = createRequest(alicia, inactive, start, end);
+        assertThat(handler.create(disabled, alicia, "Reunión", start, end).outcome().reasonCode()).isEqualTo("RESOURCE_INACTIVE");
+        assertThat(number(db, "SELECT version FROM booking.resources WHERE id = '" + inactive + "'")).isZero();
+
+        var wrongRole = new Actor(alicia.id(), Actor.Role.ADMIN);
+        var invalidActor = createRequest(wrongRole, resource, end.plusSeconds(3600), end.plusSeconds(7200));
+        assertThat(handler.create(invalidActor, wrongRole, "Reunión", end.plusSeconds(3600), end.plusSeconds(7200))
+                .outcome().reasonCode()).isEqualTo("INVALID_ACTOR");
+        assertThat(number(db, "SELECT version FROM booking.resources WHERE id = '" + resource + "'")).isEqualTo(2);
+
+        execute(db, "CREATE SEQUENCE booking.test_retry_sequence");
+        execute(db, "CREATE FUNCTION booking.test_retry() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF nextval('booking.test_retry_sequence') = 1 THEN RAISE EXCEPTION 'test exclusion' USING ERRCODE = '23P01'; END IF; RETURN NEW; END; $$");
+        execute(db, "CREATE TRIGGER test_retry BEFORE INSERT ON booking.bookings FOR EACH ROW EXECUTE FUNCTION booking.test_retry()");
+        try {
+            var retry = createRequest(alicia, resource, end.plusSeconds(3600), end.plusSeconds(7200));
+            var retried = handler.create(retry, alicia, "Reunión", end.plusSeconds(3600), end.plusSeconds(7200));
+            assertThat(retried.outcome().status()).isEqualTo(CommandOutcome.Status.SUCCEEDED);
+            assertThat(retried.outcome().resourceVersion()).isEqualTo(3);
+            assertThat(number(db, "SELECT last_value FROM booking.test_retry_sequence")).isEqualTo(2);
+            assertThat(number(db, "SELECT count(*) FROM booking.command_results WHERE command_id = '" + retry.commandId() + "'")).isEqualTo(1);
+        } finally {
+            execute(db, "DROP TRIGGER test_retry ON booking.bookings");
+            execute(db, "DROP FUNCTION booking.test_retry()");
+            execute(db, "DROP SEQUENCE booking.test_retry_sequence");
+        }
+
+        var failed = createRequest(alicia, resource, end.plusSeconds(7200), end.plusSeconds(10800));
+        execute(db, "ALTER TABLE booking.outbox_events ADD CONSTRAINT test_reject_creation CHECK (false) NOT VALID");
+        try {
+            assertThatThrownBy(() -> handler.create(failed, alicia, "Reunión", end.plusSeconds(7200), end.plusSeconds(10800)))
+                    .isInstanceOf(RuntimeException.class);
+            assertThat(number(db, "SELECT version FROM booking.resources WHERE id = '" + resource + "'")).isEqualTo(3);
+            assertThat(number(db, "SELECT count(*) FROM booking.bookings WHERE resource_id = '" + resource + "'")).isEqualTo(3);
+            assertThat(number(db, "SELECT count(*) FROM booking.command_results WHERE command_id = '" + failed.commandId() + "'")).isZero();
+        } finally {
+            execute(db, "ALTER TABLE booking.outbox_events DROP CONSTRAINT test_reject_creation");
+        }
+    }
+
+    private static CommandRequest createRequest(Actor actor, UUID resource, Instant start, Instant end) {
+        var payload = new CreateBookingPayload(start.atOffset(ZoneOffset.UTC), end.atOffset(ZoneOffset.UTC), "Reunión");
+        return new CommandRequest(actor.id(), UUID.randomUUID(), RequestFingerprint.calculate(CommandType.CreateBooking, resource, payload),
+                "CreateBooking", resource, RequestFingerprint.canonicalJson(CommandType.CreateBooking, resource, payload), UUID.randomUUID());
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class FixedClockConfiguration {
+        @Bean @Primary
+        Clock fixedClock() { return Clock.fixed(Instant.parse("2027-01-01T08:00:00Z"), ZoneOffset.UTC); }
     }
 
     private static void verifyClaims(CommandProcessor processor, Connection db) throws Exception {
@@ -146,7 +246,7 @@ class PersistenceIT {
     }
 
     private static ConfigurableApplicationContext start(PostgreSQLContainer postgres) {
-        return new SpringApplicationBuilder(BooklaneBookingApplication.class).web(WebApplicationType.NONE).profiles("test")
+        return new SpringApplicationBuilder(BooklaneBookingApplication.class, FixedClockConfiguration.class).web(WebApplicationType.NONE).profiles("test")
                 .run("--spring.autoconfigure.exclude=", "--spring.main.web-application-type=none",
                      "--booklane.database-url=" + postgres.getJdbcUrl().split("\\?")[0],
                      "--booklane.database-password=" + PASSWORD);

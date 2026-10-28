@@ -2,7 +2,7 @@
 
 Portfolio local de reservas automáticas de salas y equipos ficticios. Arquitectura prevista: Angular/RxJS, API Spring WebFlux, Kafka y servicio booking con Hibernate/PostgreSQL. Las lecturas usan REST interno y las notificaciones SSE.
 
-El proyecto está en preparación. Existen los tres módulos Java y la base Angular con pruebas. La infraestructura PostgreSQL/Kafka y el esquema de persistencia están implementados y verificados de forma aislada. Las funciones de reservas siguen pendientes; todavía no hay un arranque completo de Booklane.
+El proyecto está en preparación. Existen los tres módulos Java y la base Angular con pruebas. La infraestructura PostgreSQL/Kafka, el esquema y la confirmación transaccional de reservas están implementados y verificados de forma aislada. La integración de servicios y la interfaz siguen pendientes; todavía no hay un arranque completo de Booklane.
 
 ## Requisitos y versiones elegidas
 
